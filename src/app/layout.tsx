@@ -10,8 +10,13 @@ const sarabun = Sarabun({
 });
 
 export const metadata: Metadata = {
-  title: "e-Saraban & Archive Management System",
-  description: "ระบบสารบรรณอิเล็กทรอนิกส์และจัดการคลังเอกสาร",
+  title: "e-Saraban & Archive Management System | ไปรษณีย์ไทย",
+  description: "ระบบสารบรรณอิเล็กทรอนิกส์และจัดการคลังเอกสาร ไปรษณีย์ไทย",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({

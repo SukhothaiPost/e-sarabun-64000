@@ -21,6 +21,7 @@ import {
   Truck
 } from "lucide-react";
 import { useState, Suspense } from "react";
+import Image from "next/image";
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['super_admin', 'admin', 'officer', 'viewer'] },
@@ -109,10 +110,23 @@ export default function DashboardLayout({
 
       {/* Sidebar */}
       <div className={`fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-auto flex flex-col ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200">
-          <span className="text-xl font-bold text-blue-700 truncate">e-Saraban</span>
-          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-gray-500">
-            <X className="w-6 h-6" />
+        <div className="flex items-center justify-between h-20 px-5 border-b border-gray-200 bg-white">
+          <Link href="/dashboard" className="flex items-center space-x-3 group min-w-0">
+            <Image 
+              src="/logo.png" 
+              alt="Thailand Post" 
+              width={48} 
+              height={48} 
+              className="h-11 w-auto object-contain flex-shrink-0"
+              priority
+            />
+            <div className="min-w-0">
+              <div className="text-base font-bold text-gray-900 leading-tight truncate">e-Saraban</div>
+              <div className="text-[11px] font-semibold text-red-600 truncate">ไปรษณีย์ไทย 64000</div>
+            </div>
+          </Link>
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-gray-500 p-1.5 rounded-lg hover:bg-gray-100">
+            <X className="w-5 h-5" />
           </button>
         </div>
         
@@ -146,11 +160,20 @@ export default function DashboardLayout({
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top Header for Mobile */}
         <div className="lg:hidden flex items-center justify-between h-16 px-4 bg-white border-b border-gray-200">
-          <button onClick={() => setSidebarOpen(true)} className="text-gray-500 focus:outline-none">
+          <button onClick={() => setSidebarOpen(true)} className="text-gray-500 focus:outline-none p-1.5 rounded-lg hover:bg-gray-100">
             <Menu className="w-6 h-6" />
           </button>
-          <span className="text-lg font-bold text-gray-900">e-Saraban</span>
-          <div className="w-6"></div> {/* Spacer for center alignment */}
+          <Link href="/dashboard" className="flex items-center space-x-2">
+            <Image 
+              src="/logo.png" 
+              alt="Thailand Post" 
+              width={36} 
+              height={36} 
+              className="h-9 w-auto object-contain"
+            />
+            <span className="text-base font-bold text-gray-900">e-Saraban</span>
+          </Link>
+          <div className="w-8"></div> {/* Spacer for center alignment */}
         </div>
 
         <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">

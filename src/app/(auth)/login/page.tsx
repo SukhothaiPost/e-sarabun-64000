@@ -5,6 +5,7 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/contexts/AuthContext";
+import Image from "next/image";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -49,8 +50,19 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">ระบบสารบรรณอิเล็กทรอนิกส์</h1>
-          <p className="text-gray-500">e-Saraban & Archive Management System</p>
+          <div className="flex justify-center mb-4">
+            <Image 
+              src="/logo.png" 
+              alt="ไปรษณีย์ไทย Thailand Post" 
+              width={140} 
+              height={140} 
+              className="h-24 w-auto object-contain drop-shadow-sm"
+              priority
+            />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">ระบบสารบรรณอิเล็กทรอนิกส์</h1>
+          <p className="text-sm font-semibold text-red-600">ไปรษณีย์ไทย • จังหวัดสุโขทัย</p>
+          <p className="text-xs text-gray-400 mt-1">e-Saraban & Archive Management System</p>
         </div>
         
         {error && (
