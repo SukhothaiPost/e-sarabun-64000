@@ -5,13 +5,15 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { db } from "@/lib/firebase/config";
 import { collection, doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Camera, Image as ImageIcon, Trash2, Upload } from "lucide-react";
 import Link from "next/link";
+import { compressImage } from "@/lib/imageUtils";
 
 export default function NewArchiveLocationPage() {
   const { appUser } = useAuth();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [error, setError] = useState("");
 
   const [formData, setFormData] = useState({
@@ -20,10 +22,31 @@ export default function NewArchiveLocationPage() {
     category: "",
     folder: "",
     sequence: "",
+    image_url: "",
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsProcessingImage(true);
+    setError("");
+    try {
+      const compressed = await compressImage(file, 1280, 1280, 0.8);
+      setFormData(prev => ({ ...prev, image_url: compressed }));
+    } catch (err: any) {
+      setError("ไม่สามารถประมวลผลรูปภาพได้: " + err.message);
+    } finally {
+      setIsProcessingImage(false);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setFormData(prev => ({ ...prev, image_url: "" }));
   };
 
   const generateLocationCode = () => {
@@ -54,6 +77,7 @@ export default function NewArchiveLocationPage() {
         ...formData,
         folder_name: formData.sequence,
         location_code: locationCode,
+        image_url: formData.image_url || "",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -121,6 +145,73 @@ export default function NewArchiveLocationPage() {
             <input type="text" name="sequence" required value={formData.sequence} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เช่น แฟ้มหนังสือส่ง, แฟ้มคำสั่งแต่งตั้ง" />
             <p className="text-xs text-gray-500 mt-1">* เปลี่ยนจากลำดับ (Sequence) มาเป็นชื่อแฟ้มระบุเนื้อหา</p>
           </div>
+        </div>
+
+        {/* Photo Upload Section */}
+        <div className="border border-dashed border-gray-300 rounded-xl p-4 bg-gray-50/50">
+          <label className="block text-sm font-semibold text-gray-800 mb-1 flex items-center">
+            <Camera className="w-4 h-4 mr-2 text-purple-600" />
+            รูปภาพตู้ / ชั้นจัดเก็บ (ไม่บังคับ)
+          </label>
+          <p className="text-xs text-gray-500 mb-3">
+            ถ่ายรูปหรือแนบรูปถ่ายตู้จริง / ชั้นจริง เพื่อความสะดวกในการค้นหาเอกสารทางกายภาพ
+          </p>
+
+          {formData.image_url ? (
+            <div className="relative rounded-lg overflow-hidden border border-gray-200 bg-white max-w-sm">
+              <img 
+                src={formData.image_url} 
+                alt="รูปภาพตู้/ชั้น" 
+                className="w-full h-48 object-cover rounded-lg"
+              />
+              <button
+                type="button"
+                onClick={handleRemoveImage}
+                className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white p-1.5 rounded-full shadow-md transition-colors"
+                title="ลบรูปภาพ"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <label className="flex items-center justify-center border-2 border-dashed border-purple-300 hover:border-purple-500 bg-purple-50/40 hover:bg-purple-50/80 rounded-xl p-4 cursor-pointer transition-colors group">
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  capture="environment"
+                  onChange={handleImageFileChange} 
+                  className="hidden" 
+                  disabled={isProcessingImage}
+                />
+                <div className="flex items-center space-x-2 text-purple-700 font-medium text-sm">
+                  {isProcessingImage ? (
+                    <>
+                      <div className="h-4 w-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+                      <span>กำลังประมวลผลรูปภาพ...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                      <span>ถ่ายรูป / อัปโหลดรูปภาพตู้และชั้น</span>
+                    </>
+                  )}
+                </div>
+              </label>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400">หรือระบุ URL รูปภาพ:</span>
+                <input 
+                  type="url" 
+                  name="image_url" 
+                  value={formData.image_url} 
+                  onChange={handleChange} 
+                  placeholder="https://..."
+                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500 bg-white"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="bg-gray-50 p-4 rounded-md flex items-center justify-between border border-gray-200">

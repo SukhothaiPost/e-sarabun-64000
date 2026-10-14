@@ -88,6 +88,8 @@ export interface ArchiveLocation {
   sequence: string;
   folder_name?: string;
   location_code: string;
+  image_url?: string;
+  image_description?: string;
   createdAt: any;
   updatedAt: any;
 }

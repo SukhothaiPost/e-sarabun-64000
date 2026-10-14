@@ -32,8 +32,13 @@ import {
   AlertTriangle, 
   Save, 
   X,
-  Plus
+  Plus,
+  Camera,
+  Maximize2,
+  Image as ImageIcon,
+  Upload
 } from "lucide-react";
+import { compressImage } from "@/lib/imageUtils";
 
 export default function ArchiveDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -47,6 +52,8 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
   // Modals state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
@@ -58,6 +65,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
     category: "",
     folder: "",
     sequence: "",
+    image_url: "",
   });
 
   const fetchArchiveDetail = async () => {
@@ -74,6 +82,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
           category: locData.category || "",
           folder: locData.folder || "",
           sequence: locData.folder_name || locData.sequence || "",
+          image_url: locData.image_url || "",
         });
 
         // Fetch documents archived in this location
@@ -118,6 +127,45 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
     fetchArchiveDetail();
   }, [resolvedParams.id]);
 
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsProcessingImage(true);
+    setActionError("");
+    try {
+      const compressed = await compressImage(file, 1280, 1280, 0.8);
+      setEditFormData(prev => ({ ...prev, image_url: compressed }));
+    } catch (err: any) {
+      setActionError("ไม่สามารถประมวลผลรูปภาพได้: " + err.message);
+    } finally {
+      setIsProcessingImage(false);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setEditFormData(prev => ({ ...prev, image_url: "" }));
+  };
+
+  const handleQuickDeletePhoto = async () => {
+    if (!location) return;
+    if (!confirm("คุณต้องการลบรูปภาพตู้/ชั้นนี้ใช่หรือไม่?")) return;
+
+    try {
+      const locRef = doc(db, "archive_locations", location.id);
+      await updateDoc(locRef, {
+        image_url: "",
+        updatedAt: serverTimestamp(),
+      });
+      setLocation({ ...location, image_url: "" });
+      setEditFormData(prev => ({ ...prev, image_url: "" }));
+      setActionSuccess("ลบรูปภาพเรียบร้อยแล้ว");
+      setTimeout(() => setActionSuccess(""), 4000);
+    } catch (err: any) {
+      alert("เกิดข้อผิดพลาดในการลบรูป: " + err.message);
+    }
+  };
+
   const generateNewLocationCode = () => {
     const p1 = editFormData.cabinet.replace(/^ตู้\s*/, "").trim() || "1";
     const p2Raw = editFormData.shelf.replace(/^ชั้น\s*/, "").trim();
@@ -158,6 +206,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
         sequence: editFormData.sequence.trim(),
         folder_name: editFormData.sequence.trim(),
         location_code: newCode,
+        image_url: editFormData.image_url || "",
         updatedAt: serverTimestamp(),
       };
 
@@ -332,6 +381,101 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
+      {/* Cabinet & Shelf Photo Card */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-4 pb-2 border-b">
+          <div className="flex items-center space-x-2">
+            <Camera className="w-5 h-5 text-purple-600" />
+            <h2 className="text-base font-bold text-gray-900">รูปภาพตู้และชั้นจัดเก็บ</h2>
+          </div>
+          {location.image_url && (
+            <div className="flex items-center space-x-2">
+              <button 
+                onClick={() => setIsLightboxOpen(true)}
+                className="flex items-center text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg transition-colors border border-purple-200"
+              >
+                <Maximize2 className="w-3.5 h-3.5 mr-1.5" />
+                กดดูรูปขนาดเต็ม
+              </button>
+              {appUser?.role !== 'viewer' && (
+                <button 
+                  onClick={handleQuickDeletePhoto}
+                  className="text-xs font-medium text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded-lg transition-colors border border-red-200"
+                >
+                  ลบรูปภาพ
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {location.image_url ? (
+          <div className="flex flex-col sm:flex-row items-start gap-6">
+            <div 
+              className="relative group cursor-pointer overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-gray-50 max-w-md w-full sm:w-80 shrink-0" 
+              onClick={() => setIsLightboxOpen(true)}
+            >
+              <img 
+                src={location.image_url} 
+                alt={`รูปภาพตู้ ${location.cabinet} ชั้น ${location.shelf}`}
+                className="w-full h-56 object-cover group-hover:scale-105 transition-transform duration-300" 
+              />
+              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-medium text-xs backdrop-blur-[2px]">
+                <Maximize2 className="w-4 h-4 mr-1.5" />
+                คลิกเพื่อดูรูปภาพขนาดใหญ่
+              </div>
+              <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-sm text-white px-2 py-0.5 rounded text-[11px] font-mono">
+                ตู้ {location.cabinet} / ชั้น {location.shelf}
+              </div>
+            </div>
+
+            <div className="space-y-3 flex-1">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">ตำแหน่งทางกายภาพ</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  ตู้เอกสารหมายเลข <strong>{location.cabinet}</strong> • ชั้นวาง <strong>{location.shelf}</strong>
+                </p>
+                <p className="text-xs font-mono text-purple-700 bg-purple-50 inline-block px-2 py-0.5 rounded border border-purple-200 mt-1">
+                  รหัสสถานที่: {location.location_code}
+                </p>
+              </div>
+
+              <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100 space-y-1">
+                <p className="font-semibold text-gray-700">💡 คำแนะนำการค้นหา:</p>
+                <p>คลิกที่รูปภาพเพื่อเปิดดูภาพขยายความละเอียดสูง ช่วยให้เจ้าหน้าที่มองเห็นตู้เอกสารจริงและจุดจัดวางแฟ้มได้อย่างรวดเร็ว</p>
+              </div>
+
+              {appUser?.role !== 'viewer' && (
+                <button 
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="inline-flex items-center text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-lg shadow-xs transition-colors"
+                >
+                  <Edit className="w-3.5 h-3.5 mr-1.5 text-blue-600" />
+                  เปลี่ยนรูปภาพตู้/ชั้น
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="p-8 text-center bg-gray-50/70 border border-dashed border-gray-300 rounded-xl">
+            <Camera className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+            <p className="text-sm font-medium text-gray-700">ยังไม่มีรูปภาพตู้หรือชั้นจัดเก็บนี้</p>
+            <p className="text-xs text-gray-400 mt-1 mb-4">
+              เพิ่มรูปถ่ายตู้เอกสารจริง เพื่อให้เจ้าหน้าที่สังเกตและหยิบเอกสารได้รวดเร็ว
+            </p>
+            {appUser?.role !== 'viewer' && (
+              <button 
+                onClick={() => setIsEditModalOpen(true)}
+                className="inline-flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
+              >
+                <Camera className="w-4 h-4 mr-1.5" />
+                ถ่ายรูป / เพิ่มรูปภาพตู้และชั้น
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Document List In This Archive */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
@@ -500,6 +644,68 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                 </div>
               </div>
 
+              {/* Photo Upload in Edit Modal */}
+              <div className="border border-dashed border-gray-300 rounded-xl p-3 bg-gray-50/60">
+                <label className="block text-xs font-semibold text-gray-800 mb-1 flex items-center">
+                  <Camera className="w-3.5 h-3.5 mr-1.5 text-purple-600" />
+                  รูปภาพตู้ / ชั้นจัดเก็บ
+                </label>
+
+                {editFormData.image_url ? (
+                  <div className="relative rounded-lg overflow-hidden border border-gray-200 bg-white max-w-xs mt-2">
+                    <img 
+                      src={editFormData.image_url} 
+                      alt="รูปภาพตู้/ชั้น" 
+                      className="w-full h-36 object-cover rounded-lg"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white p-1 rounded-full shadow-md transition-colors"
+                      title="ลบรูปภาพ"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2 mt-2">
+                    <label className="flex items-center justify-center border border-dashed border-purple-300 hover:border-purple-500 bg-purple-50/40 hover:bg-purple-50/80 rounded-lg p-3 cursor-pointer transition-colors group">
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        capture="environment"
+                        onChange={handleImageFileChange} 
+                        className="hidden" 
+                        disabled={isProcessingImage}
+                      />
+                      <div className="flex items-center space-x-2 text-purple-700 font-medium text-xs">
+                        {isProcessingImage ? (
+                          <>
+                            <div className="h-3.5 w-3.5 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+                            <span>กำลังประมวลผลรูป...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Camera className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                            <span>ถ่ายรูป / อัปโหลดรูปตู้และชั้น</span>
+                          </>
+                        )}
+                      </div>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-gray-400">หรือ URL:</span>
+                      <input 
+                        type="url" 
+                        value={editFormData.image_url} 
+                        onChange={(e) => setEditFormData({ ...editFormData, image_url: e.target.value })} 
+                        placeholder="https://..."
+                        className="flex-1 px-2.5 py-1 border border-gray-300 rounded text-xs focus:ring-purple-500 focus:border-purple-500 bg-white"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="bg-purple-50 p-2.5 rounded-lg border border-purple-200 mt-2">
                 <span className="block text-xs text-purple-700 font-medium">ตัวอย่างรหัสสถานที่ใหม่</span>
                 <span className="block text-sm font-mono font-bold text-purple-900 mt-0.5">
@@ -573,6 +779,48 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                 {isSubmitting ? "กำลังลบ..." : "ยืนยันการลบ"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* LIGHTBOX MODAL: ดูรูปภาพตู้/ชั้นขนาดเต็ม */}
+      {isLightboxOpen && location?.image_url && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setIsLightboxOpen(false)}
+        >
+          <div className="relative max-w-4xl w-full flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+            {/* Top Close Button & Title */}
+            <div className="flex items-center justify-between w-full text-white mb-3 px-2">
+              <div>
+                <h3 className="text-base font-bold">
+                  รูปภาพตู้ {location.cabinet} ชั้น {location.shelf}
+                </h3>
+                <p className="text-xs text-gray-300 font-mono">
+                  {location.location_code} • {location.folder_name || location.sequence}
+                </p>
+              </div>
+              <button 
+                onClick={() => setIsLightboxOpen(false)}
+                className="text-white hover:text-gray-300 bg-white/20 hover:bg-white/30 p-2 rounded-full transition-colors"
+                title="ปิด"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* High-res image display */}
+            <div className="bg-black/40 rounded-2xl overflow-hidden max-h-[80vh] flex items-center justify-center border border-white/20 shadow-2xl">
+              <img 
+                src={location.image_url} 
+                alt={`ตู้ ${location.cabinet} ชั้น ${location.shelf}`}
+                className="max-h-[78vh] max-w-full object-contain rounded-xl"
+              />
+            </div>
+
+            <p className="text-xs text-gray-400 mt-2 text-center">
+              กดที่พื้นที่ว่างหรือปุ่ม X เพื่อปิดหน้าต่าง
+            </p>
           </div>
         </div>
       )}
