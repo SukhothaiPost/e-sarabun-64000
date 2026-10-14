@@ -328,7 +328,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
-            <div className="flex items-center gap-1.5 text-xs text-purple-700 font-medium mb-1">
+            <div className="flex items-center gap-1.5 text-xs text-red-700 font-medium mb-1">
               <Link href={`/archive?cabinet=${encodeURIComponent(location.cabinet)}`} className="hover:underline">
                 🏛️ ตู้ {location.cabinet}
               </Link>
@@ -343,7 +343,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
               <h1 className="text-2xl font-bold text-gray-900">
                 {location.folder_name || location.sequence || "แฟ้มเอกสาร"}
               </h1>
-              <span className="px-3 py-1 bg-purple-50 text-purple-700 font-mono font-bold text-sm rounded-lg border border-purple-200">
+              <span className="px-3 py-1 bg-red-50 text-red-700 font-mono font-bold text-sm rounded-lg border border-red-200">
                 {location.location_code}
               </span>
             </div>
@@ -361,7 +361,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                 onClick={() => setIsEditModalOpen(true)}
                 className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
               >
-                <Edit className="w-4 h-4 mr-2 text-blue-600" />
+                <Edit className="w-4 h-4 mr-2 text-red-600" />
                 แก้ไขข้อมูลแฟ้ม
               </button>
               <button 
@@ -388,11 +388,11 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
         </div>
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
           <span className="text-xs font-semibold text-gray-500 uppercase">เลขที่แฟ้ม</span>
-          <p className="text-base font-bold text-purple-700 mt-1">{location.folder}</p>
+          <p className="text-base font-bold text-red-700 mt-1">{location.folder}</p>
         </div>
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
           <span className="text-xs font-semibold text-gray-500 uppercase">เอกสารในแฟ้มนี้</span>
-          <p className="text-base font-bold text-blue-700 mt-1">{documents.length} ฉบับ</p>
+          <p className="text-base font-bold text-gray-900 mt-1">{documents.length} ฉบับ</p>
         </div>
       </div>
 
@@ -400,14 +400,14 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4 pb-2 border-b">
           <div className="flex items-center space-x-2">
-            <Camera className="w-5 h-5 text-purple-600" />
+            <Camera className="w-5 h-5 text-red-600" />
             <h2 className="text-base font-bold text-gray-900">รูปภาพตู้และชั้นจัดเก็บ</h2>
           </div>
           {location.image_url && (
             <div className="flex items-center space-x-2">
               <button 
                 onClick={() => setIsLightboxOpen(true)}
-                className="flex items-center text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg transition-colors border border-purple-200"
+                className="flex items-center text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors border border-red-200"
               >
                 <Maximize2 className="w-3.5 h-3.5 mr-1.5" />
                 กดดูรูปขนาดเต็ม
@@ -450,7 +450,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                 <p className="text-xs text-gray-500 mt-0.5">
                   ตู้เอกสารหมายเลข <strong>{location.cabinet}</strong> • ชั้นวาง <strong>{location.shelf}</strong>
                 </p>
-                <p className="text-xs font-mono text-purple-700 bg-purple-50 inline-block px-2 py-0.5 rounded border border-purple-200 mt-1">
+                <p className="text-xs font-mono text-red-700 bg-red-50 inline-block px-2 py-0.5 rounded border border-red-200 mt-1">
                   รหัสสถานที่: {location.location_code}
                 </p>
               </div>
@@ -465,7 +465,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                   onClick={() => setIsEditModalOpen(true)}
                   className="inline-flex items-center text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-lg shadow-xs transition-colors"
                 >
-                  <Edit className="w-3.5 h-3.5 mr-1.5 text-blue-600" />
+                  <Edit className="w-3.5 h-3.5 mr-1.5 text-red-600" />
                   เปลี่ยนรูปภาพตู้/ชั้น
                 </button>
               )}
@@ -481,7 +481,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
             {appUser?.role !== 'viewer' && (
               <button 
                 onClick={() => setIsEditModalOpen(true)}
-                className="inline-flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
+                className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-md shadow-red-200 transition-colors"
               >
                 <Camera className="w-4 h-4 mr-1.5" />
                 ถ่ายรูป / เพิ่มรูปภาพตู้และชั้น
@@ -495,7 +495,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
           <h2 className="text-base font-bold text-gray-900 flex items-center">
-            <FileText className="w-5 h-5 mr-2 text-purple-600" />
+            <FileText className="w-5 h-5 mr-2 text-red-600" />
             รายการเอกสารที่จัดเก็บในแฟ้มนี้ ({documents.length} ฉบับ)
           </h2>
         </div>
@@ -581,7 +581,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-4 border-b">
               <h3 className="text-lg font-bold text-gray-900 flex items-center">
-                <Edit className="w-5 h-5 mr-2 text-purple-600" />
+                <Edit className="w-5 h-5 mr-2 text-red-600" />
                 แก้ไขข้อมูลแฟ้มจัดเก็บ
               </h3>
               <button 
@@ -606,7 +606,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                     type="text" 
                     value={editFormData.cabinet}
                     onChange={(e) => setEditFormData({ ...editFormData, cabinet: e.target.value })}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
                     placeholder="เช่น 1 หรือ ตู้ 1"
                   />
                 </div>
@@ -616,7 +616,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                     type="text" 
                     value={editFormData.shelf}
                     onChange={(e) => setEditFormData({ ...editFormData, shelf: e.target.value })}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
                     placeholder="เช่น 01 หรือ 1"
                   />
                 </div>
@@ -628,7 +628,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                   type="text" 
                   value={editFormData.category}
                   onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
-                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
                   placeholder="เช่น งานสารบรรณ, การเงิน, บุคคล"
                 />
                 <p className="text-[11px] text-gray-500 mt-0.5">* แสดง Fulltext เต็มตามชื่อหมวดหมู่ในรหัสสถานที่</p>
@@ -642,7 +642,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                     required
                     value={editFormData.folder}
                     onChange={(e) => setEditFormData({ ...editFormData, folder: e.target.value })}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
                     placeholder="เช่น 001"
                   />
                 </div>
@@ -653,7 +653,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                     required
                     value={editFormData.sequence}
                     onChange={(e) => setEditFormData({ ...editFormData, sequence: e.target.value })}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
                     placeholder="เช่น แฟ้มหนังสือส่ง, คำสั่งแต่งตั้ง"
                   />
                 </div>
@@ -662,7 +662,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
               {/* Photo Upload in Edit Modal */}
               <div className="border border-dashed border-gray-300 rounded-xl p-3 bg-gray-50/60">
                 <label className="block text-xs font-semibold text-gray-800 mb-1 flex items-center">
-                  <Camera className="w-3.5 h-3.5 mr-1.5 text-purple-600" />
+                  <Camera className="w-3.5 h-3.5 mr-1.5 text-red-600" />
                   รูปภาพตู้ / ชั้นจัดเก็บ
                 </label>
 
@@ -684,7 +684,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                 ) : (
                   <div className="space-y-2 mt-2">
-                    <label className="flex items-center justify-center border border-dashed border-purple-300 hover:border-purple-500 bg-purple-50/40 hover:bg-purple-50/80 rounded-lg p-3 cursor-pointer transition-colors group">
+                    <label className="flex items-center justify-center border border-dashed border-red-300 hover:border-red-500 bg-red-50/40 hover:bg-red-50/80 rounded-lg p-3 cursor-pointer transition-colors group">
                       <input 
                         type="file" 
                         accept="image/*" 
@@ -693,10 +693,10 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                         className="hidden" 
                         disabled={isProcessingImage}
                       />
-                      <div className="flex items-center space-x-2 text-purple-700 font-medium text-xs">
+                      <div className="flex items-center space-x-2 text-red-700 font-medium text-xs">
                         {isProcessingImage ? (
                           <>
-                            <div className="h-3.5 w-3.5 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+                            <div className="h-3.5 w-3.5 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
                             <span>กำลังประมวลผลรูป...</span>
                           </>
                         ) : (
@@ -714,16 +714,16 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                         value={editFormData.image_url} 
                         onChange={(e) => setEditFormData({ ...editFormData, image_url: e.target.value })} 
                         placeholder="https://..."
-                        className="flex-1 px-2.5 py-1 border border-gray-300 rounded text-xs focus:ring-purple-500 focus:border-purple-500 bg-white"
+                        className="flex-1 px-2.5 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
                       />
                     </div>
                   </div>
                 )}
               </div>
 
-              <div className="bg-purple-50 p-2.5 rounded-lg border border-purple-200 mt-2">
-                <span className="block text-xs text-purple-700 font-medium">ตัวอย่างรหัสสถานที่ใหม่</span>
-                <span className="block text-sm font-mono font-bold text-purple-900 mt-0.5">
+              <div className="bg-red-50 p-2.5 rounded-lg border border-red-200 mt-2">
+                <span className="block text-xs text-red-700 font-medium">ตัวอย่างรหัสสถานที่ใหม่</span>
+                <span className="block text-sm font-mono font-bold text-red-900 mt-0.5">
                   {generateNewLocationCode()}
                 </span>
               </div>
@@ -739,7 +739,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                 <button 
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex items-center px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors disabled:opacity-50"
+                  className="flex items-center px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold shadow-md shadow-red-200 transition-colors disabled:opacity-50"
                 >
                   <Save className="w-4 h-4 mr-2" />
                   {isSubmitting ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}

@@ -140,7 +140,7 @@ export default function SearchPage() {
               autoFocus
               value={keyword}
               onChange={handleInputChange}
-              className="block w-full pl-12 pr-28 py-3.5 border-2 border-gray-200 rounded-xl text-base focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all placeholder-gray-400"
+              className="block w-full pl-12 pr-28 py-3.5 border-2 border-gray-200 rounded-xl text-base focus:border-red-500 focus:ring-4 focus:ring-red-100 transition-all placeholder-gray-400"
               placeholder="พิมพ์คำค้นหา: เรื่อง, เลขที่ลงรับ, เลขทะเบียนส่ง, เลขที่หนังสือภายนอก, ผู้ส่ง, ผู้รับ..."
             />
             <div className="absolute inset-y-0 right-2 flex items-center space-x-1">
@@ -156,7 +156,7 @@ export default function SearchPage() {
               <button 
                 type="submit"
                 disabled={loading}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-5 rounded-lg text-sm transition-colors shadow-sm disabled:opacity-70 flex items-center"
+                className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-5 rounded-lg text-sm transition-colors shadow-md shadow-red-200 disabled:opacity-70 flex items-center"
               >
                 {loading ? (
                   <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -172,14 +172,14 @@ export default function SearchPage() {
       {/* Search Results */}
       {initialLoading ? (
         <div className="p-12 text-center text-gray-500 bg-white rounded-xl border border-gray-200">
-          <div className="h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <div className="h-8 w-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
           กำลังเตรียมฐานข้อมูลค้นหา...
         </div>
       ) : hasSearched ? (
         <div className="space-y-4">
           <div className="flex items-center justify-between px-2">
             <h2 className="text-base font-bold text-gray-800">
-              ผลการค้นหาสำหรับ &ldquo;<span className="text-blue-600">{keyword}</span>&rdquo;
+              ผลการค้นหาสำหรับ &ldquo;<span className="text-red-600">{keyword}</span>&rdquo;
             </h2>
             <span className="text-sm text-gray-500">พบ {filteredDocuments.length} รายการ</span>
           </div>
@@ -196,12 +196,12 @@ export default function SearchPage() {
                 <div 
                   key={doc.id} 
                   onClick={() => router.push(`/${doc.document_type}/${doc.id}`)}
-                  className="p-5 hover:bg-blue-50/50 cursor-pointer transition-colors group"
+                  className="p-5 hover:bg-red-50/30 cursor-pointer transition-colors group"
                 >
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-2">
                     <div className="flex items-center space-x-3">
                       {getDocTypeBadge(doc.document_type)}
-                      <span className="font-mono font-bold text-blue-700 text-base">
+                      <span className="font-mono font-bold text-red-700 text-base">
                         {doc.running_number}
                       </span>
                       {doc.document_number && doc.document_number !== doc.running_number && (
@@ -215,7 +215,7 @@ export default function SearchPage() {
                     </span>
                   </div>
 
-                  <p className="text-base font-semibold text-gray-900 group-hover:text-blue-700 transition-colors mb-2">
+                  <p className="text-base font-semibold text-gray-900 group-hover:text-red-600 transition-colors mb-2">
                     {doc.subject}
                   </p>
 
@@ -227,16 +227,16 @@ export default function SearchPage() {
                       {doc.document_type === 'incoming' ? doc.sender : doc.recipient}
                     </span>
                     {doc.tracking_number && (
-                      <span className="font-mono text-purple-700 font-semibold bg-purple-50 px-2 py-0.5 rounded">
+                      <span className="font-mono text-red-700 font-semibold bg-red-50 border border-red-100 px-2 py-0.5 rounded">
                         Tracking: {doc.tracking_number}
                       </span>
                     )}
                     {doc.archive_folder && (
-                      <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded">
+                      <span className="text-red-700 bg-red-50 border border-red-100 px-2 py-0.5 rounded">
                         แฟ้ม: {doc.archive_folder}
                       </span>
                     )}
-                    <span className="ml-auto inline-flex items-center text-blue-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="ml-auto inline-flex items-center text-red-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
                       ดูรายละเอียด
                       <ArrowRight className="w-3.5 h-3.5 ml-1" />
                     </span>

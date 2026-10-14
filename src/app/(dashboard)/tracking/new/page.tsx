@@ -209,11 +209,11 @@ export default function NewTrackingPage() {
               onClick={() => { setMode('from_doc'); }}
               className={`flex items-start p-4 border rounded-xl text-left transition-all ${
                 mode === 'from_doc' 
-                  ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-500' 
+                  ? 'border-red-600 bg-red-50/70 ring-2 ring-red-500' 
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >
-              <FileText className={`w-6 h-6 mr-3 mt-0.5 ${mode === 'from_doc' ? 'text-blue-600' : 'text-gray-400'}`} />
+              <FileText className={`w-6 h-6 mr-3 mt-0.5 ${mode === 'from_doc' ? 'text-red-600' : 'text-gray-400'}`} />
               <div>
                 <p className="font-semibold text-gray-900">เลือกจากหนังสือส่ง</p>
                 <p className="text-xs text-gray-500 mt-1">ผูกเลข Tracking เข้ากับหนังสือส่งในระบบ</p>
@@ -225,11 +225,11 @@ export default function NewTrackingPage() {
               onClick={() => { setMode('standalone'); setSelectedDocId(''); }}
               className={`flex items-start p-4 border rounded-xl text-left transition-all ${
                 mode === 'standalone' 
-                  ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-500' 
+                  ? 'border-red-600 bg-red-50/70 ring-2 ring-red-500' 
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >
-              <Package className={`w-6 h-6 mr-3 mt-0.5 ${mode === 'standalone' ? 'text-blue-600' : 'text-gray-400'}`} />
+              <Package className={`w-6 h-6 mr-3 mt-0.5 ${mode === 'standalone' ? 'text-red-600' : 'text-gray-400'}`} />
               <div>
                 <p className="font-semibold text-gray-900">สร้างรายการส่งเอง</p>
                 <p className="text-xs text-gray-500 mt-1">ส่งพัสดุ/จดหมายทั่วไป ที่ไม่มีเลขหนังสือส่ง</p>
@@ -242,8 +242,8 @@ export default function NewTrackingPage() {
           
           {/* 2. เลือกหนังสือส่งที่ต้องการระบุเลขพัสดุ ให้ค้นหาได้ */}
           {mode === 'from_doc' && (
-            <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-200 space-y-3">
-              <label className="block text-sm font-semibold text-blue-900">
+            <div className="bg-red-50/40 p-4 rounded-xl border border-red-200 space-y-3">
+              <label className="block text-sm font-semibold text-red-900">
                 เลือกหนังสือส่งที่ต้องการระบุเลขพัสดุ <span className="text-red-500">*</span>
               </label>
 
@@ -255,12 +255,12 @@ export default function NewTrackingPage() {
                   placeholder="พิมพ์ค้นหาเลขทะเบียนส่ง, ชื่อเรื่อง, หรือผู้รับ..."
                   value={docSearchTerm}
                   onChange={(e) => setDocSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-md text-sm bg-white focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
                 />
               </div>
 
               {/* Documents List */}
-              <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-md bg-white divide-y divide-gray-100">
+              <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg bg-white divide-y divide-gray-100">
                 {filteredOutgoingDocs.length === 0 ? (
                   <div className="p-4 text-center text-sm text-gray-500">
                     ไม่พบหนังสือส่งที่ค้นหา
@@ -273,12 +273,12 @@ export default function NewTrackingPage() {
                         key={doc.id}
                         onClick={() => handleSelectDoc(doc)}
                         className={`p-3 cursor-pointer text-sm transition-colors flex items-center justify-between ${
-                          isSelected ? 'bg-blue-100/70 border-l-4 border-blue-600' : 'hover:bg-gray-50'
+                          isSelected ? 'bg-red-100/70 border-l-4 border-red-600' : 'hover:bg-gray-50'
                         }`}
                       >
                         <div className="min-w-0 flex-1 pr-2">
                           <div className="flex items-center space-x-2">
-                            <span className="font-bold text-blue-800 font-mono">{doc.running_number}</span>
+                            <span className="font-bold text-red-700 font-mono">{doc.running_number}</span>
                             <span className="text-xs text-gray-500">• ถึง: {doc.recipient}</span>
                           </div>
                           <p className="text-gray-900 truncate mt-0.5">{doc.subject}</p>
@@ -458,7 +458,7 @@ export default function NewTrackingPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-6 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 transition-colors disabled:opacity-70 flex items-center shadow-sm"
+              className="px-6 py-2.5 bg-red-600 text-white font-semibold rounded-xl hover:bg-red-700 transition-all shadow-md shadow-red-200 hover:shadow-lg hover:shadow-red-300/40 disabled:opacity-70 flex items-center text-sm"
             >
               {isSubmitting ? (
                 <>

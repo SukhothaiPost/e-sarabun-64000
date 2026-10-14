@@ -268,15 +268,15 @@ export default function TrackingListPage() {
         </div>
         <Link 
           href="/tracking/new" 
-          className="flex items-center bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors shadow-sm"
+          className="flex items-center bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow-md shadow-red-200 hover:shadow-lg hover:shadow-red-300/40 transition-all text-sm"
         >
           <Plus className="w-5 h-5 mr-2" />
           บันทึกเลข Tracking ใหม่
         </Link>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row gap-4 justify-between">
+      <div className="bg-white rounded-2xl shadow-xs border border-gray-150 overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-4 justify-between">
           <div className="relative max-w-md w-full">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-5 w-5 text-gray-400" />
@@ -284,7 +284,7 @@ export default function TrackingListPage() {
             <input
               type="text"
               placeholder="ค้นหาเลข Tracking, เลขที่หนังสือส่ง, เรื่อง, หรือผู้รับ..."
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 sm:text-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -292,24 +292,24 @@ export default function TrackingListPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-100">
+            <thead className="bg-gray-50/70">
               <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เลข Tracking</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ผู้ให้บริการ</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">อ้างอิงหนังสือส่ง</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เรื่อง / รายการสิ่งของ</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ผู้รับ</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">วันที่ส่ง</th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">การจัดการ</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">เลข Tracking</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">ผู้ให้บริการ</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">อ้างอิงหนังสือส่ง</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">เรื่อง / รายการสิ่งของ</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">ผู้รับ</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">วันที่ส่ง</th>
+                <th scope="col" className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">การจัดการ</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white divide-y divide-gray-100">
               {loading ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
                     <div className="flex justify-center mb-4">
-                      <div className="h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                      <div className="h-8 w-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin"></div>
                     </div>
                     กำลังโหลดข้อมูล...
                   </td>
@@ -323,8 +323,8 @@ export default function TrackingListPage() {
                 </tr>
               ) : (
                 filtered.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold font-mono text-blue-700">
+                  <tr key={item.id} className="hover:bg-red-50/30 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold font-mono text-gray-900">
                       {item.tracking_number}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
@@ -334,7 +334,7 @@ export default function TrackingListPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
                       {item.outgoing_running_number ? (
-                        <Link href={`/outgoing`} className="text-blue-600 hover:underline">
+                        <Link href={`/outgoing`} className="text-red-600 hover:underline">
                           {item.outgoing_running_number}
                         </Link>
                       ) : (
@@ -502,7 +502,7 @@ export default function TrackingListPage() {
                       placeholder="ระบุชื่อผู้รับหรือหน่วยงานปลายทาง..."
                       value={editFormData.recipient_custom}
                       onChange={(e) => setEditFormData({ ...editFormData, recipient_custom: e.target.value })}
-                      className="w-full px-3 py-2 border border-blue-400 rounded-lg text-sm bg-blue-50/30"
+                      className="w-full px-3 py-2 border border-red-300 rounded-lg text-sm bg-red-50/30 focus:ring-2 focus:ring-red-500 focus:border-red-500"
                     />
                   </div>
                 )}
@@ -516,7 +516,7 @@ export default function TrackingListPage() {
                   type="date" 
                   value={editFormData.sent_date}
                   onChange={(e) => setEditFormData({ ...editFormData, sent_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
                 />
               </div>
 
@@ -528,7 +528,7 @@ export default function TrackingListPage() {
                   rows={2}
                   value={editFormData.notes}
                   onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
                 />
               </div>
 
@@ -543,7 +543,7 @@ export default function TrackingListPage() {
                 <button 
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex items-center px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors disabled:opacity-50"
+                  className="flex items-center px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold shadow-md shadow-red-200 transition-colors disabled:opacity-50"
                 >
                   <Save className="w-4 h-4 mr-2" />
                   {isSubmitting ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}

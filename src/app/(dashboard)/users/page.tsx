@@ -98,7 +98,7 @@ export default function UsersManagementPage() {
         </div>
         <button 
           onClick={() => setShowAddForm(!showAddForm)}
-          className="flex items-center bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+          className="flex items-center bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-xl shadow-md shadow-red-200 transition-colors text-sm"
         >
           {showAddForm ? <X className="w-5 h-5 mr-2" /> : <UserPlus className="w-5 h-5 mr-2" />}
           {showAddForm ? "ปิดหน้าต่าง" : "เพิ่มผู้ใช้งานใหม่"}
@@ -106,29 +106,29 @@ export default function UsersManagementPage() {
       </div>
 
       {showAddForm && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
           <h2 className="text-lg font-bold text-gray-900 mb-4">ข้อมูลผู้ใช้งานใหม่</h2>
           <form onSubmit={handleAddUser} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อ-นามสกุล <span className="text-red-500">*</span></label>
-                <input required type="text" value={formData.displayName} onChange={e => setFormData({...formData, displayName: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
+                <input required type="text" value={formData.displayName} onChange={e => setFormData({...formData, displayName: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">แผนก/ส่วนงาน <span className="text-red-500">*</span></label>
-                <input required type="text" value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
+                <input required type="text" value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">อีเมล <span className="text-red-500">*</span></label>
-                <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
+                <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">รหัสผ่านชั่วคราว <span className="text-red-500">*</span></label>
-                <input required type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" minLength={6} />
+                <input required type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm" minLength={6} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">สิทธิ์การใช้งาน (Role)</label>
-                <select value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                <select value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm">
                   <option value="super_admin">Super Admin (ควบคุมสูงสุด)</option>
                   <option value="admin">Admin (ผู้ดูแลสารบรรณ)</option>
                   <option value="officer">Officer (เจ้าหน้าที่ปฏิบัติงาน)</option>
@@ -137,7 +137,7 @@ export default function UsersManagementPage() {
               </div>
             </div>
             <div className="flex justify-end pt-4">
-              <button type="submit" disabled={isSubmitting} className="bg-blue-600 text-white font-medium py-2 px-6 rounded-md hover:bg-blue-700 disabled:opacity-50">
+              <button type="submit" disabled={isSubmitting} className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md shadow-red-200 transition-colors disabled:opacity-50 text-sm">
                 {isSubmitting ? "กำลังบันทึก..." : "สร้างบัญชี"}
               </button>
             </div>

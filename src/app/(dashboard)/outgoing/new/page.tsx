@@ -242,8 +242,8 @@ export default function NewOutgoingDocumentPage() {
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* 3. เลขทะเบียนส่ง */}
-            <div className="md:col-span-2 bg-emerald-50/60 p-4 rounded-lg border border-emerald-200">
-              <label className="block text-sm font-semibold text-emerald-900 mb-1">
+            <div className="md:col-span-2 bg-red-50/50 p-4 rounded-xl border border-red-200">
+              <label className="block text-sm font-semibold text-red-900 mb-1">
                 เลขทะเบียนส่ง (เลขที่ส่ง) <span className="text-red-500">*</span>
               </label>
               <input 
@@ -251,10 +251,10 @@ export default function NewOutgoingDocumentPage() {
                 required 
                 value={runningNumber} 
                 onChange={(e) => setRunningNumber(e.target.value)} 
-                className="w-full md:w-1/2 px-4 py-2 border border-emerald-300 rounded-md font-mono text-lg font-bold text-emerald-800 bg-white focus:ring-emerald-500 focus:border-emerald-500" 
+                className="w-full md:w-1/2 px-4 py-2 border border-red-200 rounded-lg font-mono text-lg font-bold text-red-700 bg-white focus:ring-2 focus:ring-red-500 focus:border-red-500" 
                 placeholder="เช่น 1, 2, 3..." 
               />
-              <p className="text-xs text-emerald-700 mt-1">
+              <p className="text-xs text-red-600/80 mt-1">
                 ระบบรันตัวเลขอัตโนมัติต่อเนื่อง (สามารถปรับเปลี่ยนหรือกำหนดเลขเองได้)
               </p>
             </div>
@@ -394,13 +394,13 @@ export default function NewOutgoingDocumentPage() {
         </div>
 
         <div className="flex justify-end space-x-4 pt-4 border-t">
-          <Link href="/outgoing" className="px-6 py-2 border border-gray-300 text-gray-700 font-medium rounded-md hover:bg-gray-50 transition-colors">
+          <Link href="/outgoing" className="px-6 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors text-sm">
             ยกเลิก
           </Link>
           <button 
             type="submit" 
             disabled={isSubmitting} 
-            className="px-6 py-2 bg-emerald-600 text-white font-medium rounded-md hover:bg-emerald-700 transition-colors disabled:opacity-70 flex items-center shadow-sm"
+            className="px-6 py-2.5 bg-red-600 text-white font-semibold rounded-xl hover:bg-red-700 transition-all shadow-md shadow-red-200 hover:shadow-lg hover:shadow-red-300/40 disabled:opacity-70 flex items-center text-sm"
           >
             {isSubmitting ? (
               <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div> บันทึกข้อมูล...</>

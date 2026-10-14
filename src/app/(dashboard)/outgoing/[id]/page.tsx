@@ -517,7 +517,7 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
       case 'assigned': return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">มอบหมายแล้ว</span>;
       case 'in_progress': return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">กำลังดำเนินการ</span>;
       case 'completed': return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">ส่งแล้ว</span>;
-      case 'archived': return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">จัดเก็บแล้ว</span>;
+      case 'archived': return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">จัดเก็บแล้ว</span>;
       default: return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800">{status}</span>;
     }
   };
@@ -608,7 +608,7 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
               {document.tracking_number && (
                 <div>
                   <p className="text-xs font-semibold text-gray-500 uppercase">เลข Tracking พัสดุ</p>
-                  <p className="text-base font-mono font-bold text-purple-700 mt-1">
+                  <p className="text-base font-mono font-bold text-red-700 mt-1">
                     {document.tracking_number} {document.courier && `(${document.courier})`}
                   </p>
                 </div>
@@ -651,7 +651,7 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <span className={`text-xs px-2 py-0.5 rounded font-medium ${isIncoming ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>
+                          <span className={`text-xs px-2 py-0.5 rounded font-medium ${isIncoming ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"}`}>
                             {isIncoming ? "หนังสือรับต้นเรื่อง" : "หนังสือส่ง"}
                           </span>
                           <span className="text-sm font-bold text-gray-900">
@@ -768,25 +768,25 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4 pb-2 border-b">
               <div className="flex items-center space-x-2">
-                <FolderCheck className="w-5 h-5 text-purple-600" />
+                <FolderCheck className="w-5 h-5 text-red-600" />
                 <h2 className="text-base font-bold text-gray-900">การจัดเก็บเข้าแฟ้ม</h2>
               </div>
             </div>
             
             {document.archive_location_id || document.archive_location_code ? (
               <div className="space-y-4">
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3.5">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3.5">
                   <div className="flex items-start space-x-3">
-                    <Folder className="w-5 h-5 text-purple-600 mt-0.5 shrink-0" />
+                    <Folder className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
                     <div>
-                      <p className="text-sm font-bold text-purple-900">
+                      <p className="text-sm font-bold text-red-900">
                         {document.archive_folder || "แฟ้มจัดเก็บ"}
                       </p>
-                      <p className="text-xs font-mono font-semibold text-purple-700 mt-0.5">
+                      <p className="text-xs font-mono font-semibold text-red-700 mt-0.5">
                         รหัส: {document.archive_location_code || document.archive_location_id}
                       </p>
                       {(document.archive_cabinet || document.archive_shelf) && (
-                        <p className="text-xs text-purple-600 mt-1">
+                        <p className="text-xs text-red-600 mt-1">
                           {document.archive_cabinet} • {document.archive_shelf}
                         </p>
                       )}
@@ -824,7 +824,7 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
                       setActionError("");
                       setIsArchiveModalOpen(true);
                     }}
-                    className="w-full inline-flex items-center justify-center bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg text-sm shadow-sm transition-colors"
+                    className="w-full inline-flex items-center justify-center bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg text-sm shadow-md shadow-red-200 transition-colors"
                   >
                     <FolderPlus className="w-4 h-4 mr-2" />
                     จัดเก็บเข้าแฟ้ม
@@ -1125,7 +1125,7 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-4 border-b">
               <h3 className="text-lg font-bold text-gray-900 flex items-center">
-                <FolderCheck className="w-5 h-5 mr-2 text-purple-600" />
+                <FolderCheck className="w-5 h-5 mr-2 text-red-600" />
                 การจัดเก็บเอกสารเข้าแฟ้ม
               </h3>
               <button 
@@ -1141,9 +1141,9 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
               <button
                 type="button"
                 onClick={() => { setArchiveMode("select"); setActionError(""); }}
-                className={`flex-1 py-2 text-sm font-medium border-b-2 text-center ${
+                className={`flex-1 py-2 text-sm font-medium border-b-2 text-center transition-colors ${
                   archiveMode === "select"
-                    ? "border-purple-600 text-purple-600 font-bold"
+                    ? "border-red-600 text-red-600 font-bold"
                     : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
@@ -1152,9 +1152,9 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
               <button
                 type="button"
                 onClick={() => { setArchiveMode("create"); setActionError(""); }}
-                className={`flex-1 py-2 text-sm font-medium border-b-2 text-center ${
+                className={`flex-1 py-2 text-sm font-medium border-b-2 text-center transition-colors ${
                   archiveMode === "create"
-                    ? "border-purple-600 text-purple-600 font-bold"
+                    ? "border-red-600 text-red-600 font-bold"
                     : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
@@ -1178,7 +1178,7 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
                       <button
                         type="button"
                         onClick={() => setArchiveMode("create")}
-                        className="text-xs font-bold text-purple-600 hover:text-purple-700 underline"
+                        className="text-xs font-bold text-red-600 hover:text-red-700 underline"
                       >
                         กดที่นี่เพื่อสร้างแฟ้มใหม่
                       </button>
@@ -1192,7 +1192,7 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
                         value={selectedArchiveId}
                         onChange={(e) => setSelectedArchiveId(e.target.value)}
                         required
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
                       >
                         <option value="">-- กรุณาเลือกแฟ้ม --</option>
                         {archiveLocations.map((loc) => (
@@ -1213,7 +1213,7 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
                         type="text" 
                         value={newArchiveData.cabinet}
                         onChange={(e) => setNewArchiveData({ ...newArchiveData, cabinet: e.target.value })}
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
                         placeholder="เช่น 1 หรือ ตู้ 1"
                       />
                     </div>
@@ -1223,7 +1223,7 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
                         type="text" 
                         value={newArchiveData.shelf}
                         onChange={(e) => setNewArchiveData({ ...newArchiveData, shelf: e.target.value })}
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
                         placeholder="เช่น 01 หรือ 1"
                       />
                     </div>
@@ -1235,7 +1235,7 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
                       type="text" 
                       value={newArchiveData.category}
                       onChange={(e) => setNewArchiveData({ ...newArchiveData, category: e.target.value })}
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                      className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
                       placeholder="เช่น งานสารบรรณ, การเงิน, บุคคล"
                     />
                     <p className="text-[11px] text-gray-500 mt-0.5">* แสดง Fulltext เต็มตามชื่อหมวดหมู่ในรหัสสถานที่</p>
@@ -1249,7 +1249,7 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
                         required
                         value={newArchiveData.folder}
                         onChange={(e) => setNewArchiveData({ ...newArchiveData, folder: e.target.value })}
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
                         placeholder="เช่น 001"
                       />
                     </div>
@@ -1260,15 +1260,15 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
                         required
                         value={newArchiveData.sequence}
                         onChange={(e) => setNewArchiveData({ ...newArchiveData, sequence: e.target.value })}
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
                         placeholder="เช่น แฟ้มหนังสือส่ง 2567"
                       />
                     </div>
                   </div>
 
-                  <div className="bg-purple-50 p-2.5 rounded-lg border border-purple-200 mt-2">
-                    <span className="block text-xs text-purple-700 font-medium">ตัวอย่างรหัสสถานที่ (Location Code)</span>
-                    <span className="block text-sm font-mono font-bold text-purple-900 mt-0.5">
+                  <div className="bg-red-50 p-2.5 rounded-lg border border-red-200 mt-2">
+                    <span className="block text-xs text-red-700 font-medium">ตัวอย่างรหัสสถานที่ (Location Code)</span>
+                    <span className="block text-sm font-mono font-bold text-red-900 mt-0.5">
                       {(() => {
                         const p1 = newArchiveData.cabinet.replace(/^ตู้\s*/, "").trim() || "1";
                         const p2Raw = newArchiveData.shelf.replace(/^ชั้น\s*/, "").trim();
@@ -1296,7 +1296,7 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
                 <button 
                   type="submit"
                   disabled={isSubmitting || (archiveMode === "select" && archiveLocations.length === 0)}
-                  className="flex items-center px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors disabled:opacity-50"
+                  className="flex items-center px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold shadow-md shadow-red-200 transition-colors disabled:opacity-50"
                 >
                   <FolderCheck className="w-4 h-4 mr-2" />
                   {isSubmitting ? "กำลังบันทึก..." : "บันทึกเข้าแฟ้ม"}

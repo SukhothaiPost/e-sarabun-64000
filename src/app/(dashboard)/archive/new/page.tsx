@@ -145,7 +145,7 @@ function NewArchiveLocationContent() {
               required 
               value={formData.cabinet} 
               onChange={handleChange} 
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500" 
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500" 
               placeholder="เช่น 1 หรือ ตู้ 1" 
             />
           </div>
@@ -159,7 +159,7 @@ function NewArchiveLocationContent() {
               required 
               value={formData.shelf} 
               onChange={handleChange} 
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500" 
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500" 
               placeholder="เช่น 01 หรือ 1" 
             />
           </div>
@@ -173,7 +173,7 @@ function NewArchiveLocationContent() {
               required 
               value={formData.category} 
               onChange={handleChange} 
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500" 
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500" 
               placeholder="เช่น งานสารบรรณ, งานบุคคล, การเงิน" 
             />
             <p className="text-xs text-gray-500 mt-1">* จะแสดง Fulltext เต็มตามชื่อหมวดหมู่ที่ระบุในรหัสสถานที่</p>
@@ -188,7 +188,7 @@ function NewArchiveLocationContent() {
               required 
               value={formData.folder} 
               onChange={handleChange} 
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500" 
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500" 
               placeholder="เช่น 001" 
             />
           </div>
@@ -202,7 +202,7 @@ function NewArchiveLocationContent() {
               required 
               value={formData.sequence} 
               onChange={handleChange} 
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500" 
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500" 
               placeholder="เช่น แฟ้มหนังสือส่ง, แฟ้มคำสั่งแต่งตั้ง" 
             />
             <p className="text-xs text-gray-500 mt-1">* เปลี่ยนจากลำดับ (Sequence) มาเป็นชื่อแฟ้มระบุเนื้อหา</p>
@@ -212,7 +212,7 @@ function NewArchiveLocationContent() {
         {/* Photo Upload Section */}
         <div className="border border-dashed border-gray-300 rounded-xl p-4 bg-gray-50/50">
           <label className="block text-sm font-semibold text-gray-800 mb-1 flex items-center">
-            <Camera className="w-4 h-4 mr-2 text-purple-600" />
+            <Camera className="w-4 h-4 mr-2 text-red-600" />
             รูปภาพตู้ / ชั้นจัดเก็บ (ไม่บังคับ)
           </label>
           <p className="text-xs text-gray-500 mb-3">
@@ -237,7 +237,7 @@ function NewArchiveLocationContent() {
             </div>
           ) : (
             <div className="space-y-3">
-              <label className="flex items-center justify-center border-2 border-dashed border-purple-300 hover:border-purple-500 bg-purple-50/40 hover:bg-purple-50/80 rounded-xl p-4 cursor-pointer transition-colors group">
+              <label className="flex items-center justify-center border-2 border-dashed border-red-300 hover:border-red-500 bg-red-50/40 hover:bg-red-50/80 rounded-xl p-4 cursor-pointer transition-colors group">
                 <input 
                   type="file" 
                   accept="image/*" 
@@ -246,10 +246,10 @@ function NewArchiveLocationContent() {
                   className="hidden" 
                   disabled={isProcessingImage}
                 />
-                <div className="flex items-center space-x-2 text-purple-700 font-medium text-sm">
+                <div className="flex items-center space-x-2 text-red-700 font-medium text-sm">
                   {isProcessingImage ? (
                     <>
-                      <div className="h-4 w-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+                      <div className="h-4 w-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
                       <span>กำลังประมวลผลรูปภาพ...</span>
                     </>
                   ) : (
@@ -269,25 +269,25 @@ function NewArchiveLocationContent() {
                   value={formData.image_url} 
                   onChange={handleChange} 
                   placeholder="https://..."
-                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500 bg-white"
+                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
                 />
               </div>
             </div>
           )}
         </div>
 
-        <div className="bg-gray-50 p-4 rounded-md flex items-center justify-between border border-gray-200">
+        <div className="bg-gray-50 p-4 rounded-xl flex items-center justify-between border border-gray-200">
           <div>
             <span className="block text-xs text-gray-500 font-medium">ตัวอย่างรหัสสถานที่ (Location Code)</span>
-            <span className="block text-lg font-mono font-bold text-blue-700 mt-1">{generateLocationCode()}</span>
+            <span className="block text-lg font-mono font-bold text-red-700 mt-1">{generateLocationCode()}</span>
           </div>
         </div>
 
         <div className="flex justify-end space-x-4 pt-4">
-          <Link href={backUrl} className="px-6 py-2 border border-gray-300 text-gray-700 font-medium rounded-md hover:bg-gray-50 transition-colors">
+          <Link href={backUrl} className="px-6 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors text-sm">
             ยกเลิก
           </Link>
-          <button type="submit" disabled={isSubmitting} className="px-6 py-2 bg-purple-600 text-white font-medium rounded-md hover:bg-purple-700 transition-colors disabled:opacity-70 flex items-center">
+          <button type="submit" disabled={isSubmitting} className="px-6 py-2.5 bg-red-600 text-white font-semibold rounded-xl hover:bg-red-700 transition-all shadow-md shadow-red-200 hover:shadow-lg hover:shadow-red-300/40 disabled:opacity-70 flex items-center text-sm">
             {isSubmitting ? (
               <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div> บันทึกข้อมูล...</>
             ) : "บันทึกจุดจัดเก็บ"}

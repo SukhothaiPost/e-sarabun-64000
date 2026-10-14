@@ -363,7 +363,7 @@ function ArchiveContent() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-            <Archive className="w-7 h-7 mr-2.5 text-purple-600" />
+            <Archive className="w-7 h-7 mr-2.5 text-red-600" />
             จัดการคลังเอกสาร
           </h1>
           <p className="text-sm text-gray-500 mt-1">
@@ -379,7 +379,7 @@ function ArchiveContent() {
                 ? `/archive/new?cabinet=${selectedCabinet}`
                 : "/archive/new"
             } 
-            className="flex items-center bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-xl shadow-sm transition-colors text-sm"
+            className="flex items-center bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow-md shadow-red-200 hover:shadow-lg hover:shadow-red-300/40 transition-all text-sm"
           >
             <Plus className="w-4 h-4 mr-1.5" />
             {selectedShelf 
@@ -403,8 +403,8 @@ function ArchiveContent() {
               }}
               className={`flex items-center px-2.5 py-1.5 rounded-lg transition-colors font-semibold ${
                 !selectedCabinet 
-                  ? "bg-purple-100 text-purple-900" 
-                  : "text-gray-600 hover:text-purple-700 hover:bg-gray-100"
+                  ? "bg-red-100 text-red-900" 
+                  : "text-gray-600 hover:text-red-700 hover:bg-gray-100"
               }`}
             >
               <Archive className="w-4 h-4 mr-1.5" />
@@ -421,8 +421,8 @@ function ArchiveContent() {
                   }}
                   className={`flex items-center px-2.5 py-1.5 rounded-lg transition-colors font-semibold ${
                     selectedCabinet && !selectedShelf 
-                      ? "bg-purple-100 text-purple-900" 
-                      : "text-gray-600 hover:text-purple-700 hover:bg-gray-100"
+                      ? "bg-red-100 text-red-900" 
+                      : "text-gray-600 hover:text-red-700 hover:bg-gray-100"
                   }`}
                 >
                   <Layers className="w-4 h-4 mr-1.5" />
@@ -434,7 +434,7 @@ function ArchiveContent() {
             {selectedCabinet && selectedShelf && (
               <>
                 <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
-                <span className="flex items-center px-2.5 py-1.5 rounded-lg font-bold bg-purple-600 text-white shadow-xs">
+                <span className="flex items-center px-2.5 py-1.5 rounded-lg font-bold bg-red-600 text-white shadow-xs">
                   <Folder className="w-4 h-4 mr-1.5" />
                   3. ชั้น {selectedShelf} (แฟ้มเอกสาร)
                 </span>
@@ -448,7 +448,7 @@ function ArchiveContent() {
             <input
               type="text"
               placeholder="ค้นหาตู้, ชั้น, ชื่อแฟ้ม, รหัส..."
-              className="w-full pl-9 pr-8 py-1.5 text-xs border border-gray-300 rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+              className="w-full pl-9 pr-8 py-1.5 text-xs border border-gray-300 rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-red-500 focus:border-red-500"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -467,13 +467,13 @@ function ArchiveContent() {
       {/* IF SEARCH IS ACTIVE: Show matched folders with breadcrumb path */}
       {searchResults !== null ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="p-4 border-b border-gray-200 bg-purple-50/50 flex items-center justify-between">
+          <div className="p-4 border-b border-gray-200 bg-red-50/50 flex items-center justify-between">
             <h2 className="text-sm font-bold text-gray-900">
               ผลการค้นหา: &quot;{searchTerm}&quot; ({searchResults.length} รายการ)
             </h2>
             <button
               onClick={() => setSearchTerm("")}
-              className="text-xs text-purple-700 hover:underline"
+              className="text-xs text-red-700 hover:underline"
             >
               ล้างการค้นหา (กลับสู่โหมดลำดับตู้/ชั้น/แฟ้ม)
             </button>
@@ -489,11 +489,11 @@ function ArchiveContent() {
               {searchResults.map(loc => (
                 <div key={loc.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow bg-white flex flex-col justify-between">
                   <div>
-                    <div className="flex items-center gap-1.5 text-xs text-purple-700 font-medium mb-2 bg-purple-50 p-2 rounded-lg border border-purple-100">
+                    <div className="flex items-center gap-1.5 text-xs text-red-700 font-medium mb-2 bg-red-50 p-2 rounded-lg border border-red-100">
                       <span>ตู้ {loc.cabinet}</span>
-                      <ChevronRight className="w-3.5 h-3.5 text-purple-400" />
+                      <ChevronRight className="w-3.5 h-3.5 text-red-400" />
                       <span>ชั้น {loc.shelf}</span>
-                      <ChevronRight className="w-3.5 h-3.5 text-purple-400" />
+                      <ChevronRight className="w-3.5 h-3.5 text-red-400" />
                       <span className="font-bold text-gray-900">แฟ้ม {loc.folder}</span>
                     </div>
 
@@ -508,13 +508,13 @@ function ArchiveContent() {
                         setSearchTerm("");
                         setHierarchy(normalizeCabinet(loc.cabinet), normalizeShelf(loc.shelf));
                       }}
-                      className="text-xs text-purple-600 hover:underline font-medium"
+                      className="text-xs text-red-600 hover:underline font-medium"
                     >
                       ดูทั้งชั้นนี้ →
                     </button>
                     <Link
                       href={`/archive/${loc.id}`}
-                      className="text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 px-2.5 py-1 rounded-md"
+                      className="text-xs font-semibold text-red-600 hover:text-red-800 bg-red-50 px-2.5 py-1 rounded-md border border-red-100"
                     >
                       ดูเอกสารในแฟ้ม
                     </Link>
@@ -526,7 +526,7 @@ function ArchiveContent() {
         </div>
       ) : loading ? (
         <div className="p-16 text-center text-gray-500 bg-white rounded-xl border border-gray-200 shadow-sm">
-          <div className="h-8 w-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <div className="h-8 w-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
           กำลังโหลดข้อมูลคลังเอกสาร...
         </div>
       ) : hierarchyData.length === 0 ? (
@@ -538,7 +538,7 @@ function ArchiveContent() {
           </p>
           <Link
             href="/archive/new"
-            className="inline-flex items-center bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-5 rounded-xl text-sm transition-colors shadow-sm"
+            className="inline-flex items-center bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-5 rounded-xl text-sm transition-colors shadow-md shadow-red-200"
           >
             <Plus className="w-4 h-4 mr-2" />
             เพิ่มตู้และจุดจัดเก็บแรก
@@ -569,11 +569,11 @@ function ArchiveContent() {
               return (
                 <div 
                   key={cab.cabinetId}
-                  className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-lg hover:border-purple-300 transition-all overflow-hidden flex flex-col justify-between group"
+                  className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-lg hover:border-red-300 transition-all overflow-hidden flex flex-col justify-between group"
                 >
                   <div>
                     {/* Cabinet Photo or Graphic Header */}
-                    <div className="relative h-44 bg-gradient-to-br from-slate-100 to-purple-50 border-b border-gray-100 overflow-hidden">
+                    <div className="relative h-44 bg-gradient-to-br from-slate-100 to-red-50/40 border-b border-gray-100 overflow-hidden">
                       {cabPhoto ? (
                         <>
                           <img 
@@ -604,16 +604,16 @@ function ArchiveContent() {
                         </>
                       ) : (
                         <div 
-                          className="w-full h-full flex flex-col items-center justify-center text-gray-400 cursor-pointer p-4 hover:bg-purple-50/60 transition-colors"
+                          className="w-full h-full flex flex-col items-center justify-center text-gray-400 cursor-pointer p-4 hover:bg-red-50/60 transition-colors"
                           onClick={() => setHierarchy(cab.cabinetId, null)}
                         >
-                          <Archive className="w-14 h-14 text-purple-300 mb-1.5 stroke-[1.5]" />
+                          <Archive className="w-14 h-14 text-red-300 mb-1.5 stroke-[1.5]" />
                           <span className="text-xs font-medium text-gray-500">คลิกเพื่อเปิดดูชั้นในตู้</span>
                         </div>
                       )}
 
                       {/* Cabinet ID badge overlay */}
-                      <div className="absolute bottom-2 left-2 bg-purple-900/85 backdrop-blur-sm text-white px-3 py-1 rounded-lg text-xs font-bold shadow-xs">
+                      <div className="absolute bottom-2 left-2 bg-slate-900/85 backdrop-blur-sm text-white px-3 py-1 rounded-lg text-xs font-bold shadow-xs">
                         🏛️ {cab.displayName}
                       </div>
                     </div>
@@ -623,11 +623,11 @@ function ArchiveContent() {
                       <div className="flex items-center justify-between">
                         <h3 
                           onClick={() => setHierarchy(cab.cabinetId, null)}
-                          className="text-lg font-bold text-gray-900 group-hover:text-purple-700 cursor-pointer transition-colors"
+                          className="text-lg font-bold text-gray-900 group-hover:text-red-600 cursor-pointer transition-colors"
                         >
                           {cab.displayName}
                         </h3>
-                        <span className="text-xs font-semibold px-2.5 py-1 bg-purple-50 text-purple-700 rounded-lg border border-purple-200">
+                        <span className="text-xs font-semibold px-2.5 py-1 bg-red-50 text-red-700 rounded-lg border border-red-200">
                           {shelvesCount} ชั้นวาง
                         </span>
                       </div>
@@ -650,7 +650,7 @@ function ArchiveContent() {
                   <div className="p-4 pt-0 space-y-2">
                     <button
                       onClick={() => setHierarchy(cab.cabinetId, null)}
-                      className="w-full flex items-center justify-center bg-purple-50 hover:bg-purple-600 text-purple-700 hover:text-white font-semibold py-2.5 px-4 rounded-xl transition-all text-xs border border-purple-200 hover:border-purple-600 shadow-2xs group-hover:bg-purple-600 group-hover:text-white"
+                      className="w-full flex items-center justify-center bg-red-50 hover:bg-red-600 text-red-700 hover:text-white font-semibold py-2.5 px-4 rounded-xl transition-all text-xs border border-red-200 hover:border-red-600 shadow-2xs group-hover:bg-red-600 group-hover:text-white"
                     >
                       <span>เปิดดูชั้นในตู้ ({shelvesCount} ชั้น)</span>
                       <ChevronRight className="w-4 h-4 ml-1" />
@@ -660,9 +660,9 @@ function ArchiveContent() {
                       <div className="flex justify-end pt-1">
                         <button
                           onClick={() => handleOpenPhotoModal("cabinet", cab.cabinetId)}
-                          className="text-[11px] text-gray-500 hover:text-purple-700 flex items-center font-medium"
+                          className="text-[11px] text-gray-500 hover:text-red-700 flex items-center font-medium"
                         >
-                          <Camera className="w-3.5 h-3.5 mr-1 text-purple-500" />
+                          <Camera className="w-3.5 h-3.5 mr-1 text-red-500" />
                           {cabPhoto ? "เปลี่ยนรูปถ่ายตู้" : "+ ถ่ายรูป/เพิ่มรูปตู้"}
                         </button>
                       </div>
@@ -693,7 +693,7 @@ function ArchiveContent() {
                   <h2 className="text-xl font-bold text-gray-900">
                     🏛️ ตู้ {selectedCabinet}
                   </h2>
-                  <span className="text-xs font-semibold px-2.5 py-0.5 bg-purple-100 text-purple-800 rounded-md">
+                  <span className="text-xs font-semibold px-2.5 py-0.5 bg-red-100 text-red-800 rounded-md">
                     {currentCabinetData ? currentCabinetData.shelvesMap.size : 0} ชั้นวาง
                   </span>
                   <span className="text-xs font-semibold px-2.5 py-0.5 bg-blue-100 text-blue-800 rounded-md">
@@ -713,7 +713,7 @@ function ArchiveContent() {
                     url: structurePhotos[`cabinet_${normalizeCabinet(selectedCabinet)}`],
                     title: `รูปถ่าย ตู้ ${selectedCabinet}`,
                   })}
-                  className="flex items-center text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg border border-purple-200"
+                  className="flex items-center text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg border border-red-200"
                 >
                   <Maximize2 className="w-3.5 h-3.5 mr-1" />
                   ดูรูปตู้จริง
@@ -724,7 +724,7 @@ function ArchiveContent() {
                   onClick={() => handleOpenPhotoModal("cabinet", selectedCabinet)}
                   className="flex items-center text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg"
                 >
-                  <Camera className="w-3.5 h-3.5 mr-1 text-purple-600" />
+                  <Camera className="w-3.5 h-3.5 mr-1 text-red-600" />
                   ถ่ายรูป/เปลี่ยนรูปตู้
                 </button>
               )}
@@ -740,11 +740,11 @@ function ArchiveContent() {
               return (
                 <div
                   key={shelf.shelfId}
-                  className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-lg hover:border-purple-300 transition-all overflow-hidden flex flex-col justify-between group"
+                  className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-lg hover:border-red-300 transition-all overflow-hidden flex flex-col justify-between group"
                 >
                   <div>
                     {/* Shelf Photo or Banner */}
-                    <div className="relative h-40 bg-gradient-to-br from-purple-50 to-indigo-50 border-b border-gray-100 overflow-hidden">
+                    <div className="relative h-40 bg-gradient-to-br from-red-50/50 to-rose-50/50 border-b border-gray-100 overflow-hidden">
                       {shelfPhoto ? (
                         <>
                           <img 
@@ -775,15 +775,15 @@ function ArchiveContent() {
                         </>
                       ) : (
                         <div 
-                          className="w-full h-full flex flex-col items-center justify-center text-gray-400 cursor-pointer p-4 hover:bg-purple-100/40 transition-colors"
+                          className="w-full h-full flex flex-col items-center justify-center text-gray-400 cursor-pointer p-4 hover:bg-red-50/40 transition-colors"
                           onClick={() => setHierarchy(selectedCabinet, shelf.shelfId)}
                         >
-                          <Layers className="w-12 h-12 text-purple-300 mb-1" />
+                          <Layers className="w-12 h-12 text-red-300 mb-1" />
                           <span className="text-xs font-medium text-gray-500">คลิกเพื่อเปิดดูแฟ้มในชั้นนี้</span>
                         </div>
                       )}
 
-                      <div className="absolute bottom-2 left-2 bg-purple-900/85 backdrop-blur-sm text-white px-2.5 py-0.5 rounded-md text-xs font-bold">
+                      <div className="absolute bottom-2 left-2 bg-slate-900/85 backdrop-blur-sm text-white px-2.5 py-0.5 rounded-md text-xs font-bold">
                         🪜 {shelf.displayName}
                       </div>
                     </div>
@@ -793,7 +793,7 @@ function ArchiveContent() {
                       <div className="flex items-center justify-between">
                         <h3 
                           onClick={() => setHierarchy(selectedCabinet, shelf.shelfId)}
-                          className="text-base font-bold text-gray-900 group-hover:text-purple-700 cursor-pointer transition-colors"
+                          className="text-base font-bold text-gray-900 group-hover:text-red-600 cursor-pointer transition-colors"
                         >
                           {shelf.displayName}
                         </h3>
@@ -814,7 +814,7 @@ function ArchiveContent() {
                   <div className="p-4 pt-0 space-y-2">
                     <button
                       onClick={() => setHierarchy(selectedCabinet, shelf.shelfId)}
-                      className="w-full flex items-center justify-center bg-purple-50 hover:bg-purple-600 text-purple-700 hover:text-white font-semibold py-2.5 px-4 rounded-xl transition-all text-xs border border-purple-200 hover:border-purple-600 shadow-2xs group-hover:bg-purple-600 group-hover:text-white"
+                      className="w-full flex items-center justify-center bg-red-50 hover:bg-red-600 text-red-700 hover:text-white font-semibold py-2.5 px-4 rounded-xl transition-all text-xs border border-red-200 hover:border-red-600 shadow-2xs group-hover:bg-red-600 group-hover:text-white"
                     >
                       <span>เปิดดูแฟ้มในชั้นนี้ ({shelf.folders.length} แฟ้ม)</span>
                       <ChevronRight className="w-4 h-4 ml-1" />
@@ -824,9 +824,9 @@ function ArchiveContent() {
                       <div className="flex justify-end pt-1">
                         <button
                           onClick={() => handleOpenPhotoModal("shelf", selectedCabinet, shelf.shelfId)}
-                          className="text-[11px] text-gray-500 hover:text-purple-700 flex items-center font-medium"
+                          className="text-[11px] text-gray-500 hover:text-red-700 flex items-center font-medium"
                         >
-                          <Camera className="w-3.5 h-3.5 mr-1 text-purple-500" />
+                          <Camera className="w-3.5 h-3.5 mr-1 text-red-500" />
                           {shelfPhoto ? "เปลี่ยนรูปถ่ายชั้น" : "+ ถ่ายรูป/เพิ่มรูปชั้น"}
                         </button>
                       </div>
@@ -857,7 +857,7 @@ function ArchiveContent() {
                   <h2 className="text-xl font-bold text-gray-900">
                     📁 ตู้ {selectedCabinet} / ชั้น {selectedShelf}
                   </h2>
-                  <span className="text-xs font-semibold px-2.5 py-0.5 bg-purple-100 text-purple-800 rounded-md">
+                  <span className="text-xs font-semibold px-2.5 py-0.5 bg-red-100 text-red-800 rounded-md">
                     {currentShelfData ? currentShelfData.folders.length : 0} แฟ้มเอกสาร
                   </span>
                 </div>
@@ -874,7 +874,7 @@ function ArchiveContent() {
                     url: structurePhotos[`shelf_${normalizeCabinet(selectedCabinet)}_${normalizeShelf(selectedShelf)}`],
                     title: `รูปถ่าย ตู้ ${selectedCabinet} / ชั้น ${selectedShelf}`,
                   })}
-                  className="flex items-center text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg border border-purple-200"
+                  className="flex items-center text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg border border-red-200"
                 >
                   <Maximize2 className="w-3.5 h-3.5 mr-1" />
                   ดูรูปชั้นจริง
@@ -885,7 +885,7 @@ function ArchiveContent() {
                   onClick={() => handleOpenPhotoModal("shelf", selectedCabinet, selectedShelf)}
                   className="flex items-center text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg"
                 >
-                  <Camera className="w-3.5 h-3.5 mr-1 text-purple-600" />
+                  <Camera className="w-3.5 h-3.5 mr-1 text-red-600" />
                   ถ่ายรูป/เปลี่ยนรูปชั้น
                 </button>
               )}
@@ -899,7 +899,7 @@ function ArchiveContent() {
               <p className="text-sm font-bold text-gray-700">ยังไม่มีแฟ้มบนชั้นนี้</p>
               <Link
                 href={`/archive/new?cabinet=${selectedCabinet}&shelf=${selectedShelf}`}
-                className="inline-flex items-center text-xs font-semibold text-purple-600 hover:underline mt-2"
+                className="inline-flex items-center text-xs font-semibold text-red-600 hover:underline mt-2"
               >
                 <Plus className="w-3.5 h-3.5 mr-1" />
                 เพิ่มแฟ้มใหม่บนชั้นนี้
@@ -911,20 +911,20 @@ function ArchiveContent() {
                 <Link
                   key={loc.id}
                   href={`/archive/${loc.id}`}
-                  className="border border-gray-200 rounded-xl p-5 hover:shadow-lg hover:border-purple-300 hover:bg-purple-50/20 transition-all cursor-pointer block group bg-white flex flex-col justify-between"
+                  className="border border-gray-200 rounded-xl p-5 hover:shadow-lg hover:border-red-300 hover:bg-red-50/20 transition-all cursor-pointer block group bg-white flex flex-col justify-between"
                 >
                   <div>
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center min-w-0">
-                        <Folder className="h-5 w-5 text-purple-600 mr-2 shrink-0" />
-                        <span className="font-mono font-bold text-xs text-purple-900 group-hover:text-purple-700 truncate">
+                        <Folder className="h-5 w-5 text-red-600 mr-2 shrink-0" />
+                        <span className="font-mono font-bold text-xs text-red-900 group-hover:text-red-700 truncate">
                           {loc.location_code}
                         </span>
                       </div>
                     </div>
 
                     <div className="space-y-1 mb-3">
-                      <h4 className="text-base font-bold text-gray-900 group-hover:text-purple-700 transition-colors">
+                      <h4 className="text-base font-bold text-gray-900 group-hover:text-red-700 transition-colors">
                         {loc.folder_name || loc.sequence || "แฟ้มเอกสาร"}
                       </h4>
                       <p className="text-xs text-gray-500">
@@ -933,7 +933,7 @@ function ArchiveContent() {
                     </div>
                   </div>
 
-                  <div className="flex items-center text-xs font-semibold text-purple-600 group-hover:text-purple-700 pt-3 border-t border-gray-100 justify-between">
+                  <div className="flex items-center text-xs font-semibold text-red-600 group-hover:text-red-700 pt-3 border-t border-gray-100 justify-between">
                     <span>เปิดดูเอกสารและรายละเอียดแฟ้ม</span>
                     <span className="text-base font-bold transition-transform group-hover:translate-x-1">→</span>
                   </div>
@@ -992,7 +992,7 @@ function ArchiveContent() {
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-3 border-b">
               <h3 className="text-base font-bold text-gray-900 flex items-center">
-                <Camera className="w-5 h-5 mr-2 text-purple-600" />
+                <Camera className="w-5 h-5 mr-2 text-red-600" />
                 {photoModal.title}
               </h3>
               <button 
@@ -1032,7 +1032,7 @@ function ArchiveContent() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-purple-300 hover:border-purple-500 bg-purple-50/50 hover:bg-purple-50/80 rounded-xl p-6 cursor-pointer transition-colors group">
+                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-red-300 hover:border-red-500 bg-red-50/50 hover:bg-red-50/80 rounded-xl p-6 cursor-pointer transition-colors group">
                     <input 
                       type="file" 
                       accept="image/*" 
@@ -1041,8 +1041,8 @@ function ArchiveContent() {
                       className="hidden" 
                       disabled={isProcessing}
                     />
-                    <Camera className="w-8 h-8 text-purple-600 mb-2 group-hover:scale-110 transition-transform" />
-                    <span className="text-sm font-semibold text-purple-800">
+                    <Camera className="w-8 h-8 text-red-600 mb-2 group-hover:scale-110 transition-transform" />
+                    <span className="text-sm font-semibold text-red-800">
                       {isProcessing ? "กำลังประมวลผล..." : "ถ่ายรูปจากกล้อง หรือเลือกไฟล์รูป"}
                     </span>
                     <span className="text-xs text-gray-400 mt-1">
@@ -1060,7 +1060,7 @@ function ArchiveContent() {
                         setUploadPreview(e.target.value);
                       }} 
                       placeholder="https://..."
-                      className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-purple-500 focus:border-purple-500"
+                      className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
                     />
                   </div>
                 </div>
@@ -1090,7 +1090,7 @@ function ArchiveContent() {
                     type="button"
                     onClick={handleSavePhotoModal}
                     disabled={isProcessing || !uploadPreview}
-                    className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors disabled:opacity-50 flex items-center"
+                    className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-md shadow-red-200 transition-colors disabled:opacity-50 flex items-center"
                   >
                     {isProcessing ? "กำลังบันทึก..." : "บันทึกรูปภาพ"}
                   </button>
@@ -1108,7 +1108,7 @@ export default function ArchivePage() {
   return (
     <Suspense fallback={
       <div className="p-16 text-center text-gray-500">
-        <div className="h-8 w-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+        <div className="h-8 w-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
         กำลังโหลดคลังเอกสาร...
       </div>
     }>
