@@ -44,6 +44,10 @@ export interface SarabanDocument {
   courier?: string;
   drive_links: DriveLink[];
   archive_location_id: string;
+  archive_location_code?: string;
+  archive_cabinet?: string;
+  archive_shelf?: string;
+  archive_folder?: string;
   related_documents: string[];
   created_by: string;
   updated_by: string;

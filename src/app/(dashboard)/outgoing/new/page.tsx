@@ -46,6 +46,11 @@ export default function NewOutgoingDocumentPage() {
     related_document_id: "",
   });
 
+  const [driveLink, setDriveLink] = useState({
+    title: "",
+    url: "",
+  });
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -158,7 +163,13 @@ export default function NewOutgoingDocumentPage() {
           responsible_user_id: "",
           status: "registered",
           notes: formData.notes,
-          drive_links: [],
+          drive_links: driveLink.url.trim() ? [{
+            title: driveLink.title.trim() || "เอกสารแนบ Google Drive",
+            url: driveLink.url.trim().startsWith("http") ? driveLink.url.trim() : `https://${driveLink.url.trim()}`,
+            description: "",
+            created_by: appUser.displayName || "เจ้าหน้าที่",
+            created_at: new Date(),
+          }] : [],
           archive_location_id: "",
           related_documents: formData.related_document_id ? [formData.related_document_id] : [],
           created_by: appUser.id,
@@ -334,6 +345,33 @@ export default function NewOutgoingDocumentPage() {
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+
+        {/* แนบลิงก์ Google Drive (ถ้ามี) */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-800 mb-2">แนบลิงก์ Google Drive (ถ้ามี)</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">ชื่อไฟล์ / หัวข้อเอกสาร</label>
+              <input
+                type="text"
+                value={driveLink.title}
+                onChange={(e) => setDriveLink({ ...driveLink, title: e.target.value })}
+                placeholder="เช่น หนังสือสแกนต้นฉบับ.pdf"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">URL ลิงก์ Google Drive</label>
+              <input
+                type="text"
+                value={driveLink.url}
+                onChange={(e) => setDriveLink({ ...driveLink, url: e.target.value })}
+                placeholder="https://drive.google.com/..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
           </div>
         </div>
 
