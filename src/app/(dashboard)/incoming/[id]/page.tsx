@@ -78,10 +78,10 @@ export default function IncomingDocumentDetailPage({ params }: { params: Promise
   const [archiveMode, setArchiveMode] = useState<"select" | "create">("select");
   const [selectedArchiveId, setSelectedArchiveId] = useState("");
   const [newArchiveData, setNewArchiveData] = useState({
-    cabinet: "ตู้ A",
-    shelf: "ชั้น 1",
+    cabinet: "1",
+    shelf: "01",
     category: "งานสารบรรณ",
-    folder: "แฟ้มหนังสือรับ",
+    folder: "001",
     sequence: "001",
   });
 
@@ -363,11 +363,14 @@ export default function IncomingDocumentDetailPage({ params }: { params: Promise
           return;
         }
 
-        const p1 = newArchiveData.cabinet.replace("ตู้ ", "").trim() || "X";
-        const p2 = newArchiveData.shelf.replace("ชั้น ", "").trim().padStart(2, '0') || "00";
-        const p3 = newArchiveData.category.substring(0, 2).toUpperCase() || "XX";
-        const p4 = newArchiveData.folder.substring(0, 3).toUpperCase() || "001";
-        const p5 = newArchiveData.sequence.padStart(3, '0') || "001";
+        const p1 = newArchiveData.cabinet.replace(/^ตู้\s*/, "").trim() || "1";
+        const p2Raw = newArchiveData.shelf.replace(/^ชั้น\s*/, "").trim();
+        const p2 = !isNaN(Number(p2Raw)) && p2Raw ? p2Raw.padStart(2, '0') : (p2Raw || "01");
+        const p3 = newArchiveData.category.trim() || "XX";
+        const p4Raw = newArchiveData.folder.trim();
+        const p4 = !isNaN(Number(p4Raw)) && p4Raw ? p4Raw.padStart(3, '0') : (p4Raw || "000");
+        const p5Raw = newArchiveData.sequence.trim();
+        const p5 = !isNaN(Number(p5Raw)) && p5Raw ? p5Raw.padStart(3, '0') : (p5Raw || "000");
         const locationCode = `${p1}-${p2}-${p3}-${p4}-${p5}`;
 
         const newLocRef = doc(collection(db, "archive_locations"));
@@ -1107,7 +1110,7 @@ export default function IncomingDocumentDetailPage({ params }: { params: Promise
                         value={newArchiveData.cabinet}
                         onChange={(e) => setNewArchiveData({ ...newArchiveData, cabinet: e.target.value })}
                         className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
-                        placeholder="เช่น ตู้ A, ตู้ 1"
+                        placeholder="เช่น 1 หรือ ตู้ 1"
                       />
                     </div>
                     <div>
@@ -1117,13 +1120,13 @@ export default function IncomingDocumentDetailPage({ params }: { params: Promise
                         value={newArchiveData.shelf}
                         onChange={(e) => setNewArchiveData({ ...newArchiveData, shelf: e.target.value })}
                         className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
-                        placeholder="เช่น ชั้น 1, ชั้น 2"
+                        placeholder="เช่น 01 หรือ 1"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">หมวดหมู่</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">หมวดหมู่/งาน (Category)</label>
                     <input 
                       type="text" 
                       value={newArchiveData.category}
@@ -1131,22 +1134,23 @@ export default function IncomingDocumentDetailPage({ params }: { params: Promise
                       className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
                       placeholder="เช่น งานสารบรรณ, การเงิน, บุคคล"
                     />
+                    <p className="text-[11px] text-gray-500 mt-0.5">* แสดง Fulltext เต็มตามชื่อหมวดหมู่ในรหัสสถานที่</p>
                   </div>
 
                   <div className="grid grid-cols-3 gap-3">
                     <div className="col-span-2">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">ชื่อแฟ้ม <span className="text-red-500">*</span></label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">แฟ้ม (Folder) <span className="text-red-500">*</span></label>
                       <input 
                         type="text" 
                         required
                         value={newArchiveData.folder}
                         onChange={(e) => setNewArchiveData({ ...newArchiveData, folder: e.target.value })}
                         className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
-                        placeholder="เช่น แฟ้มหนังสือรับ 2567"
+                        placeholder="เช่น 001"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">ลำดับแฟ้ม</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">ลำดับ (Sequence)</label>
                       <input 
                         type="text" 
                         value={newArchiveData.sequence}
@@ -1155,6 +1159,23 @@ export default function IncomingDocumentDetailPage({ params }: { params: Promise
                         placeholder="001"
                       />
                     </div>
+                  </div>
+
+                  <div className="bg-purple-50 p-2.5 rounded-lg border border-purple-200 mt-2">
+                    <span className="block text-xs text-purple-700 font-medium">ตัวอย่างรหัสสถานที่ (Location Code)</span>
+                    <span className="block text-sm font-mono font-bold text-purple-900 mt-0.5">
+                      {(() => {
+                        const p1 = newArchiveData.cabinet.replace(/^ตู้\s*/, "").trim() || "1";
+                        const p2Raw = newArchiveData.shelf.replace(/^ชั้น\s*/, "").trim();
+                        const p2 = !isNaN(Number(p2Raw)) && p2Raw ? p2Raw.padStart(2, '0') : (p2Raw || "01");
+                        const p3 = newArchiveData.category.trim() || "XX";
+                        const p4Raw = newArchiveData.folder.trim();
+                        const p4 = !isNaN(Number(p4Raw)) && p4Raw ? p4Raw.padStart(3, '0') : (p4Raw || "000");
+                        const p5Raw = newArchiveData.sequence.trim();
+                        const p5 = !isNaN(Number(p5Raw)) && p5Raw ? p5Raw.padStart(3, '0') : (p5Raw || "000");
+                        return `${p1}-${p2}-${p3}-${p4}-${p5}`;
+                      })()}
+                    </span>
                   </div>
                 </div>
               )}

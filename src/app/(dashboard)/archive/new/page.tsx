@@ -15,8 +15,8 @@ export default function NewArchiveLocationPage() {
   const [error, setError] = useState("");
 
   const [formData, setFormData] = useState({
-    cabinet: "ตู้ A",
-    shelf: "ชั้น 1",
+    cabinet: "1",
+    shelf: "01",
     category: "",
     folder: "",
     sequence: "",
@@ -27,11 +27,14 @@ export default function NewArchiveLocationPage() {
   };
 
   const generateLocationCode = () => {
-    const p1 = formData.cabinet.replace("ตู้ ", "").trim() || "X";
-    const p2 = formData.shelf.replace("ชั้น ", "").trim().padStart(2, '0') || "00";
-    const p3 = formData.category.substring(0, 2).toUpperCase() || "XX";
-    const p4 = formData.folder.padStart(3, '0') || "000";
-    const p5 = formData.sequence.padStart(3, '0') || "000";
+    const p1 = formData.cabinet.replace(/^ตู้\s*/, "").trim() || "1";
+    const p2Raw = formData.shelf.replace(/^ชั้น\s*/, "").trim();
+    const p2 = !isNaN(Number(p2Raw)) && p2Raw ? p2Raw.padStart(2, '0') : (p2Raw || "01");
+    const p3 = formData.category.trim() || "XX";
+    const p4Raw = formData.folder.trim();
+    const p4 = !isNaN(Number(p4Raw)) && p4Raw ? p4Raw.padStart(3, '0') : (p4Raw || "000");
+    const p5Raw = formData.sequence.trim();
+    const p5 = !isNaN(Number(p5Raw)) && p5Raw ? p5Raw.padStart(3, '0') : (p5Raw || "000");
     return `${p1}-${p2}-${p3}-${p4}-${p5}`;
   };
 
@@ -97,23 +100,24 @@ export default function NewArchiveLocationPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">ตู้ (Cabinet) <span className="text-red-500">*</span></label>
-            <input type="text" name="cabinet" required value={formData.cabinet} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เช่น ตู้ A, ตู้ 1" />
+            <input type="text" name="cabinet" required value={formData.cabinet} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เช่น 1 หรือ ตู้ 1" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">ชั้น (Shelf) <span className="text-red-500">*</span></label>
-            <input type="text" name="shelf" required value={formData.shelf} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เช่น ชั้น 1, ชั้น 2" />
+            <input type="text" name="shelf" required value={formData.shelf} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เช่น 01 หรือ 1" />
           </div>
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่/งาน (Category) <span className="text-red-500">*</span></label>
-            <input type="text" name="category" required value={formData.category} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เช่น งานบุคคล, งานพัสดุ" />
+            <input type="text" name="category" required value={formData.category} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เช่น งานสารบรรณ, งานบุคคล, การเงิน" />
+            <p className="text-xs text-gray-500 mt-1">* จะแสดง Fulltext เต็มตามชื่อหมวดหมู่ที่ระบุในรหัสสถานที่</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">แฟ้ม (Folder) <span className="text-red-500">*</span></label>
-            <input type="text" name="folder" required value={formData.folder} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เลขแฟ้ม เช่น 14, 01" />
+            <input type="text" name="folder" required value={formData.folder} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เช่น 001, 01" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">ลำดับ (Sequence) <span className="text-red-500">*</span></label>
-            <input type="text" name="sequence" required value={formData.sequence} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="ลำดับ เช่น 037" />
+            <input type="text" name="sequence" required value={formData.sequence} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เช่น 001" />
           </div>
         </div>
 
