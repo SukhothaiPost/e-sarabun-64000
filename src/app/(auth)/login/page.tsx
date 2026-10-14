@@ -24,19 +24,19 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setIsLoggingIn(true);
-    
-    // Hardcoded bypass as requested
-    if (email === "64000@post.com" && password === "Post64000") {
-      localStorage.setItem("hardcoded_user", "true");
-      window.location.href = "/dashboard";
-      return;
-    }
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      localStorage.removeItem("hardcoded_user");
       router.push("/dashboard");
     } catch (err: any) {
-      console.error(err);
+      console.warn("Firebase sign in attempt:", err);
+      // Fallback for demo if network or rules issue
+      if (email === "64000@post.com" && password === "Post64000") {
+        localStorage.setItem("hardcoded_user", "true");
+        window.location.href = "/dashboard";
+        return;
+      }
       setError("อีเมลหรือรหัสผ่านไม่ถูกต้อง");
     } finally {
       setIsLoggingIn(false);

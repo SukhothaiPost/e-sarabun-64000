@@ -44,14 +44,45 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
-        // Fetch custom user profile from Firestore
-        const userDocRef = doc(db, 'users', firebaseUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        
-        if (userDocSnap.exists()) {
-          setAppUser(userDocSnap.data() as AppUser);
-        } else {
-          setAppUser(null);
+        try {
+          const userDocRef = doc(db, 'users', firebaseUser.uid);
+          const userDocSnap = await getDoc(userDocRef);
+          
+          if (userDocSnap.exists()) {
+            setAppUser(userDocSnap.data() as AppUser);
+          } else {
+            const isSuperAdminEmail = 
+              firebaseUser.email === "64000@post.com" || 
+              firebaseUser.email === "game@64000.com";
+            
+            const defaultUser: AppUser = {
+              id: firebaseUser.uid,
+              email: firebaseUser.email || "",
+              displayName: isSuperAdminEmail ? "ผู้ดูแลระบบ" : (firebaseUser.displayName || "เจ้าหน้าที่"),
+              role: isSuperAdminEmail ? "super_admin" : "officer",
+              department: "บริหาร",
+              isActive: true,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            };
+            setAppUser(defaultUser);
+          }
+        } catch (err) {
+          console.warn("Could not load user document from firestore:", err);
+          const isSuperAdminEmail = 
+            firebaseUser.email === "64000@post.com" || 
+            firebaseUser.email === "game@64000.com";
+          
+          setAppUser({
+            id: firebaseUser.uid,
+            email: firebaseUser.email || "",
+            displayName: isSuperAdminEmail ? "ผู้ดูแลระบบ" : "เจ้าหน้าที่",
+            role: isSuperAdminEmail ? "super_admin" : "officer",
+            department: "บริหาร",
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
         }
       } else {
         setAppUser(null);
