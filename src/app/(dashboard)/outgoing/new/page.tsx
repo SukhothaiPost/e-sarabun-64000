@@ -109,6 +109,14 @@ export default function NewOutgoingDocumentPage() {
         const configRef = doc(db, "system_configs", "running_numbers");
         const configDoc = await transaction.get(configRef);
 
+        // Read related document BEFORE any writes if selected
+        let relatedDocRef = null;
+        let relatedDocSnap = null;
+        if (formData.related_document_id) {
+          relatedDocRef = doc(db, "documents", formData.related_document_id);
+          relatedDocSnap = await transaction.get(relatedDocRef);
+        }
+
         let outgoingLastNumber = 0;
         let yearInConfig = currentYear;
 
@@ -123,6 +131,7 @@ export default function NewOutgoingDocumentPage() {
         const nextNumber = outgoingLastNumber + 1;
         const finalRunningNumber = runningNumber.trim();
 
+        // 1. Write config
         transaction.set(configRef, {
           current_year: currentYear,
           incoming_last_number: configDoc.exists() && yearInConfig === currentYear ? configDoc.data().incoming_last_number : 0,
@@ -130,6 +139,7 @@ export default function NewOutgoingDocumentPage() {
           internal_last_number: configDoc.exists() && yearInConfig === currentYear ? configDoc.data().internal_last_number : 0,
         }, { merge: true });
 
+        // 2. Write new document
         const newDocRef = doc(collection(db, "documents"));
         const docData = {
           id: newDocRef.id,
@@ -159,19 +169,15 @@ export default function NewOutgoingDocumentPage() {
         };
         transaction.set(newDocRef, docData);
 
-        // Link back from the incoming document if selected
-        if (formData.related_document_id) {
-          const relatedDocRef = doc(db, "documents", formData.related_document_id);
-          const relatedDocSnap = await transaction.get(relatedDocRef);
-          if (relatedDocSnap.exists()) {
-            const relatedDocData = relatedDocSnap.data();
-            const existingLinks = relatedDocData.related_documents || [];
-            if (!existingLinks.includes(newDocRef.id)) {
-              transaction.update(relatedDocRef, {
-                related_documents: [...existingLinks, newDocRef.id],
-                updatedAt: serverTimestamp()
-              });
-            }
+        // 3. Write related document update
+        if (relatedDocRef && relatedDocSnap && relatedDocSnap.exists()) {
+          const relatedDocData = relatedDocSnap.data();
+          const existingLinks = relatedDocData.related_documents || [];
+          if (!existingLinks.includes(newDocRef.id)) {
+            transaction.update(relatedDocRef, {
+              related_documents: [...existingLinks, newDocRef.id],
+              updatedAt: serverTimestamp()
+            });
           }
         }
 
