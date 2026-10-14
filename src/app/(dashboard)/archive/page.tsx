@@ -21,8 +21,11 @@ import {
   FolderCheck,
   CheckCircle,
   Upload,
-  Trash2,
-  ExternalLink
+  ExternalLink,
+  History,
+  Save,
+  FileText,
+  Trash2
 } from "lucide-react";
 import { compressImage } from "@/lib/imageUtils";
 
@@ -89,6 +92,24 @@ function ArchiveContent() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [modalError, setModalError] = useState("");
   const [toastMessage, setToastMessage] = useState("");
+
+  // Global Historical modal states
+  const [isHistModalOpen, setIsHistModalOpen] = useState(false);
+  const [histSubmitting, setHistSubmitting] = useState(false);
+  const [histError, setHistError] = useState("");
+  const [histForm, setHistForm] = useState({
+    targetLocationId: "",
+    subject: "",
+    historical_type: "หนังสือรับ (ย้อนหลัง)",
+    document_number: "",
+    document_date: new Date().toISOString().split("T")[0],
+    historical_year: String(new Date().getFullYear() + 543 - 1),
+    sender: "",
+    recipient: "",
+    google_drive_link: "",
+    page_count: "1",
+    notes: "",
+  });
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -338,6 +359,118 @@ function ArchiveContent() {
     }
   };
 
+  const handleOpenGlobalHistModal = () => {
+    setHistError("");
+    let defaultLocId = "";
+    if (selectedCabinet && selectedShelf && currentShelfData?.folders?.length) {
+      defaultLocId = currentShelfData.folders[0].id;
+    } else if (selectedCabinet && currentCabinetData) {
+      const firstShelf = Array.from(currentCabinetData.shelvesMap.values())[0];
+      if (firstShelf?.folders?.length) {
+        defaultLocId = firstShelf.folders[0].id;
+      } else if (locations.length > 0) {
+        defaultLocId = locations[0].id;
+      }
+    } else if (locations.length > 0) {
+      defaultLocId = locations[0].id;
+    }
+
+    const defaultYear = String(new Date().getFullYear() + 543 - 1);
+    setHistForm({
+      targetLocationId: defaultLocId,
+      subject: "",
+      historical_type: "หนังสือรับ (ย้อนหลัง)",
+      document_number: "",
+      document_date: new Date().toISOString().split("T")[0],
+      historical_year: defaultYear,
+      sender: "",
+      recipient: "",
+      google_drive_link: "",
+      page_count: "1",
+      notes: "",
+    });
+    setIsHistModalOpen(true);
+  };
+
+  const handleSaveGlobalHist = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!histForm.targetLocationId) {
+      setHistError("กรุณาเลือกแฟ้มจัดเก็บปลายทาง");
+      return;
+    }
+    if (!histForm.subject.trim()) {
+      setHistError("กรุณาระบุเรื่อง / ชื่อเอกสาร");
+      return;
+    }
+
+    const targetLoc = locations.find(l => l.id === histForm.targetLocationId);
+    if (!targetLoc) {
+      setHistError("ไม่พบแฟ้มจัดเก็บที่เลือก");
+      return;
+    }
+
+    setHistSubmitting(true);
+    setHistError("");
+
+    try {
+      const docDate = new Date(histForm.document_date);
+      const driveLinks = histForm.google_drive_link.trim() ? [{
+        title: "ไฟล์สแกนเอกสารเดิม (Google Drive)",
+        url: histForm.google_drive_link.trim(),
+        description: "ไฟล์สแกนเอกสารย้อนหลัง",
+        created_by: appUser?.displayName || "เจ้าหน้าที่",
+        created_at: new Date(),
+      }] : [];
+
+      const newDocRef = doc(collection(db, "documents"));
+      const runningNum = histForm.document_number.trim() || `HIST-${Date.now().toString().slice(-6)}`;
+
+      await setDoc(newDocRef, {
+        id: newDocRef.id,
+        running_number: runningNum,
+        document_type: "historical",
+        is_historical: true,
+        historical_type: histForm.historical_type,
+        historical_year: histForm.historical_year.trim(),
+        document_number: histForm.document_number.trim(),
+        document_date: docDate,
+        subject: histForm.subject.trim(),
+        sender: histForm.sender.trim() || "-",
+        recipient: histForm.recipient.trim() || "-",
+        department: targetLoc.category || "งานสารบรรณ",
+        urgency: "ปกติ",
+        confidentiality: "ปกติ",
+        responsible_user_id: appUser?.id || "",
+        status: "archived",
+        notes: histForm.notes.trim(),
+        google_drive_link: histForm.google_drive_link.trim(),
+        drive_links: driveLinks,
+        page_count: histForm.page_count.trim(),
+        archive_location_id: targetLoc.id,
+        archive_location_code: targetLoc.location_code,
+        archive_cabinet: targetLoc.cabinet,
+        archive_shelf: targetLoc.shelf,
+        archive_folder: targetLoc.folder,
+        archive_folder_name: targetLoc.folder_name || targetLoc.sequence,
+        related_documents: [],
+        created_by: appUser?.displayName || "เจ้าหน้าที่",
+        updated_by: appUser?.displayName || "เจ้าหน้าที่",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        deleted: false,
+      });
+
+      showToast(`บันทึกเรื่องเก่าเข้าแฟ้ม "${targetLoc.folder_name || targetLoc.sequence}" สำเร็จ!`);
+      setIsHistModalOpen(false);
+      await fetchAll();
+    } catch (err: any) {
+      console.error(err);
+      setHistError("เกิดข้อผิดพลาดในการบันทึกเอกสาร: " + err.message);
+    } finally {
+      setHistSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Toast Alert */}
@@ -360,6 +493,16 @@ function ArchiveContent() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {appUser?.role !== 'viewer' && (
+            <button
+              type="button"
+              onClick={handleOpenGlobalHistModal}
+              className="flex items-center bg-white border border-red-200 hover:bg-red-50 text-red-700 font-semibold py-2.5 px-4 rounded-xl shadow-xs transition-all text-sm"
+            >
+              <History className="w-4 h-4 mr-1.5 text-red-600" />
+              + บันทึกเรื่องเก่าย้อนหลัง
+            </button>
+          )}
           <Link 
             href={
               selectedShelf && selectedCabinet
@@ -1012,6 +1155,224 @@ function ArchiveContent() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {/* ========================================================
+          MODAL 3: บันทึกเรื่องเก่า / เอกสารย้อนหลังเข้าแฟ้ม
+          ======================================================== */}
+      {isHistModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b">
+              <h3 className="text-base font-bold text-gray-900 flex items-center">
+                <History className="w-5 h-5 mr-2 text-red-600" />
+                บันทึกเรื่องเก่า / เอกสารย้อนหลังเข้าแฟ้มจัดเก็บ
+              </h3>
+              <button 
+                onClick={() => setIsHistModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-full"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {histError && (
+              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+                {histError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveGlobalHist} className="mt-4 space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  เลือกแฟ้มจัดเก็บปลายทาง <span className="text-red-500">*</span>
+                </label>
+                <select
+                  required
+                  value={histForm.targetLocationId}
+                  onChange={(e) => setHistForm({ ...histForm, targetLocationId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                >
+                  <option value="">-- กรุณาเลือกแฟ้มจัดเก็บ --</option>
+                  {locations.map((loc) => (
+                    <option key={loc.id} value={loc.id}>
+                      [{loc.location_code}] {loc.folder_name || loc.sequence} (ตู้ {loc.cabinet} / ชั้น {loc.shelf})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  เรื่อง / ชื่อเอกสาร <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  required
+                  value={histForm.subject}
+                  onChange={(e) => setHistForm({ ...histForm, subject: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  placeholder="เช่น ขออนุมัติจัดซื้ออุปกรณ์สำนักงานประจำปี 2565"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    ประเภทเอกสารย้อนหลัง
+                  </label>
+                  <select
+                    value={histForm.historical_type}
+                    onChange={(e) => setHistForm({ ...histForm, historical_type: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                  >
+                    <option value="หนังสือรับ (ย้อนหลัง)">หนังสือรับ (ย้อนหลัง)</option>
+                    <option value="หนังสือส่ง (ย้อนหลัง)">หนังสือส่ง (ย้อนหลัง)</option>
+                    <option value="คำสั่ง / ประกาศ">คำสั่ง / ประกาศ</option>
+                    <option value="รายงาน / สรุปผลการปฏิบัติงาน">รายงาน / สรุปผลการปฏิบัติงาน</option>
+                    <option value="สัญญา / เอกสารทางกฎหมาย">สัญญา / เอกสารทางกฎหมาย</option>
+                    <option value="บันทึกข้อความภายใน">บันทึกข้อความภายใน</option>
+                    <option value="เอกสารทั่วไป / อื่นๆ">เอกสารทั่วไป / อื่นๆ</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    ปี พ.ศ. ของเอกสาร
+                  </label>
+                  <input 
+                    type="text" 
+                    value={histForm.historical_year}
+                    onChange={(e) => setHistForm({ ...histForm, historical_year: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="เช่น 2564, 2565, 2566"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    เลขที่หนังสือ / เลขทะเบียนเดิม
+                  </label>
+                  <input 
+                    type="text" 
+                    value={histForm.document_number}
+                    onChange={(e) => setHistForm({ ...histForm, document_number: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="เช่น ปณท(สท) 124/2565"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    ลงวันที่เอกสาร
+                  </label>
+                  <input 
+                    type="date" 
+                    value={histForm.document_date}
+                    onChange={(e) => {
+                      const newDate = e.target.value;
+                      const yr = newDate ? String(new Date(newDate).getFullYear() + 543) : histForm.historical_year;
+                      setHistForm({ 
+                        ...histForm, 
+                        document_date: newDate,
+                        historical_year: yr 
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    จาก (หน่วยงานผู้ส่ง / ต้นเรื่อง)
+                  </label>
+                  <input 
+                    type="text" 
+                    value={histForm.sender}
+                    onChange={(e) => setHistForm({ ...histForm, sender: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="เช่น ปณท สำนักงานใหญ่, ฝ่ายการเงิน"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    ถึง / เรียน (หน่วยงานผู้รับ)
+                  </label>
+                  <input 
+                    type="text" 
+                    value={histForm.recipient}
+                    onChange={(e) => setHistForm({ ...histForm, recipient: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="เช่น ผจก.ไปรษณีย์จังหวัดสุโขทัย"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    ลิงก์ Google Drive (ไฟล์สแกน PDF)
+                  </label>
+                  <input 
+                    type="url" 
+                    value={histForm.google_drive_link}
+                    onChange={(e) => setHistForm({ ...histForm, google_drive_link: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="https://drive.google.com/..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    จำนวนแผ่น
+                  </label>
+                  <input 
+                    type="text" 
+                    value={histForm.page_count}
+                    onChange={(e) => setHistForm({ ...histForm, page_count: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="เช่น 3 แผ่น"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  หมายเหตุ / รายละเอียดการจัดเก็บเพิ่มเติม
+                </label>
+                <textarea 
+                  rows={2}
+                  value={histForm.notes}
+                  onChange={(e) => setHistForm({ ...histForm, notes: e.target.value })}
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  placeholder="เช่น เอกสารต้นฉบับเย็บเล่มรวมกับสัญญาปี 2565"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-3 border-t">
+                <button 
+                  type="button"
+                  onClick={() => setIsHistModalOpen(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  ยกเลิก
+                </button>
+                <button 
+                  type="submit"
+                  disabled={histSubmitting}
+                  className="flex items-center px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold shadow-md shadow-red-200 transition-colors disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {histSubmitting ? "กำลังบันทึก..." : "บันทึกเข้าแฟ้ม"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

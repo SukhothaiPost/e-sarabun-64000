@@ -36,7 +36,16 @@ import {
   Camera,
   Maximize2,
   Image as ImageIcon,
-  Upload
+  Upload,
+  History,
+  Calendar,
+  Building2,
+  UserCheck,
+  FilePlus,
+  Link2,
+  Eye,
+  Layers,
+  FileDown
 } from "lucide-react";
 import { compressImage } from "@/lib/imageUtils";
 
@@ -57,6 +66,29 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
+
+  // Historical Doc states
+  const [isHistoricalModalOpen, setIsHistoricalModalOpen] = useState(false);
+  const [editingHistoricalId, setEditingHistoricalId] = useState<string | null>(null);
+  const [viewingHistoricalDoc, setViewingHistoricalDoc] = useState<SarabanDocument | null>(null);
+  const [historicalForm, setHistoricalForm] = useState({
+    subject: "",
+    historical_type: "หนังสือรับ (ย้อนหลัง)",
+    document_number: "",
+    document_date: new Date().toISOString().split("T")[0],
+    historical_year: String(new Date().getFullYear() + 543 - 1),
+    sender: "",
+    recipient: "",
+    google_drive_link: "",
+    page_count: "1",
+    notes: "",
+  });
+
+  // Attach existing unarchived doc states
+  const [isAttachModalOpen, setIsAttachModalOpen] = useState(false);
+  const [unarchivedDocs, setUnarchivedDocs] = useState<SarabanDocument[]>([]);
+  const [selectedDocIdToAttach, setSelectedDocIdToAttach] = useState("");
+  const [loadingUnarchived, setLoadingUnarchived] = useState(false);
 
   // Edit form state
   const [editFormData, setEditFormData] = useState({
@@ -304,6 +336,225 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
+  // --- Historical (Legacy) Document Handlers ---
+  const handleOpenHistoricalModal = (docToEdit?: SarabanDocument) => {
+    setActionError("");
+    if (docToEdit) {
+      setEditingHistoricalId(docToEdit.id);
+      let dateStr = new Date().toISOString().split("T")[0];
+      if (docToEdit.document_date) {
+        const d = docToEdit.document_date instanceof Date ? docToEdit.document_date : new Date(docToEdit.document_date);
+        if (!isNaN(d.getTime())) {
+          dateStr = d.toISOString().split("T")[0];
+        }
+      }
+      setHistoricalForm({
+        subject: docToEdit.subject || "",
+        historical_type: docToEdit.historical_type || "หนังสือรับ (ย้อนหลัง)",
+        document_number: docToEdit.document_number || docToEdit.running_number || "",
+        document_date: dateStr,
+        historical_year: docToEdit.historical_year || String(new Date(dateStr).getFullYear() + 543),
+        sender: docToEdit.sender || "",
+        recipient: docToEdit.recipient || "",
+        google_drive_link: docToEdit.google_drive_link || docToEdit.drive_links?.[0]?.url || "",
+        page_count: docToEdit.page_count || "1",
+        notes: docToEdit.notes || "",
+      });
+    } else {
+      setEditingHistoricalId(null);
+      const defaultYear = String(new Date().getFullYear() + 543 - 1);
+      setHistoricalForm({
+        subject: "",
+        historical_type: "หนังสือรับ (ย้อนหลัง)",
+        document_number: "",
+        document_date: new Date().toISOString().split("T")[0],
+        historical_year: defaultYear,
+        sender: "",
+        recipient: "",
+        google_drive_link: "",
+        page_count: "1",
+        notes: "",
+      });
+    }
+    setIsHistoricalModalOpen(true);
+  };
+
+  const handleSaveHistoricalDoc = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!location) return;
+    if (!historicalForm.subject.trim()) {
+      setActionError("กรุณาระบุเรื่อง / ชื่อเอกสาร");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setActionError("");
+
+    try {
+      const docDate = new Date(historicalForm.document_date);
+      const driveLinks = historicalForm.google_drive_link.trim() ? [{
+        title: "ไฟล์สแกนเอกสารเดิม (Google Drive)",
+        url: historicalForm.google_drive_link.trim(),
+        description: "ไฟล์สแกนเอกสารย้อนหลัง",
+        created_by: appUser?.displayName || "เจ้าหน้าที่",
+        created_at: new Date(),
+      }] : [];
+
+      if (editingHistoricalId) {
+        // Update existing historical document
+        const docRef = doc(db, "documents", editingHistoricalId);
+        await updateDoc(docRef, {
+          subject: historicalForm.subject.trim(),
+          historical_type: historicalForm.historical_type,
+          document_number: historicalForm.document_number.trim(),
+          document_date: docDate,
+          historical_year: historicalForm.historical_year.trim(),
+          sender: historicalForm.sender.trim(),
+          recipient: historicalForm.recipient.trim(),
+          google_drive_link: historicalForm.google_drive_link.trim(),
+          drive_links: driveLinks,
+          page_count: historicalForm.page_count.trim(),
+          notes: historicalForm.notes.trim(),
+          updatedAt: serverTimestamp(),
+          updated_by: appUser?.displayName || "เจ้าหน้าที่",
+        });
+        setActionSuccess("แก้ไขข้อมูลเอกสารย้อนหลังเรียบร้อยแล้ว");
+      } else {
+        // Create new historical document directly in this archive folder
+        const newDocRef = doc(collection(db, "documents"));
+        const runningNum = historicalForm.document_number.trim() || `HIST-${Date.now().toString().slice(-6)}`;
+        
+        await setDoc(newDocRef, {
+          id: newDocRef.id,
+          running_number: runningNum,
+          document_type: "historical",
+          is_historical: true,
+          historical_type: historicalForm.historical_type,
+          historical_year: historicalForm.historical_year.trim(),
+          document_number: historicalForm.document_number.trim(),
+          document_date: docDate,
+          subject: historicalForm.subject.trim(),
+          sender: historicalForm.sender.trim() || "-",
+          recipient: historicalForm.recipient.trim() || "-",
+          department: location.category || "งานสารบรรณ",
+          urgency: "ปกติ",
+          confidentiality: "ปกติ",
+          responsible_user_id: appUser?.id || "",
+          status: "archived",
+          notes: historicalForm.notes.trim(),
+          google_drive_link: historicalForm.google_drive_link.trim(),
+          drive_links: driveLinks,
+          page_count: historicalForm.page_count.trim(),
+          archive_location_id: location.id,
+          archive_location_code: location.location_code,
+          archive_cabinet: location.cabinet,
+          archive_shelf: location.shelf,
+          archive_folder: location.folder,
+          archive_folder_name: location.folder_name || location.sequence,
+          related_documents: [],
+          created_by: appUser?.displayName || "เจ้าหน้าที่",
+          updated_by: appUser?.displayName || "เจ้าหน้าที่",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          deleted: false,
+        });
+        setActionSuccess("บันทึกเรื่องเก่า / เอกสารย้อนหลังเข้าแฟ้มสำเร็จ");
+      }
+
+      setIsHistoricalModalOpen(false);
+      setTimeout(() => setActionSuccess(""), 4000);
+      await fetchArchiveDetail();
+    } catch (err: any) {
+      console.error(err);
+      setActionError("เกิดข้อผิดพลาดในการบันทึกเอกสาร: " + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteHistoricalDoc = async (docId: string, docSubject: string) => {
+    if (!confirm(`คุณต้องการลบรายการเอกสารย้อนหลัง "${docSubject}" ออกจากระบบใช่หรือไม่?`)) return;
+
+    try {
+      const docRef = doc(db, "documents", docId);
+      await updateDoc(docRef, {
+        deleted: true,
+        deleted_at: serverTimestamp(),
+        deleted_by: appUser?.displayName || "",
+      });
+
+      setActionSuccess("ลบเอกสารย้อนหลังเรียบร้อยแล้ว");
+      setTimeout(() => setActionSuccess(""), 4000);
+      if (viewingHistoricalDoc?.id === docId) {
+        setViewingHistoricalDoc(null);
+      }
+      await fetchArchiveDetail();
+    } catch (err: any) {
+      alert("เกิดข้อผิดพลาด: " + err.message);
+    }
+  };
+
+  // --- Attach Existing Unarchived Doc Handlers ---
+  const handleOpenAttachModal = async () => {
+    setLoadingUnarchived(true);
+    setIsAttachModalOpen(true);
+    setSelectedDocIdToAttach("");
+    setActionError("");
+
+    try {
+      const qDocs = query(
+        collection(db, "documents"),
+        where("deleted", "==", false)
+      );
+      const snap = await getDocs(qDocs);
+      const list: SarabanDocument[] = [];
+      snap.forEach(d => {
+        const data = d.data() as SarabanDocument;
+        if (!data.archive_location_id && data.status !== "archived") {
+          list.push({ ...data, id: d.id });
+        }
+      });
+      setUnarchivedDocs(list);
+    } catch (err: any) {
+      console.error(err);
+    } finally {
+      setLoadingUnarchived(false);
+    }
+  };
+
+  const handleAttachDocToArchive = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDocIdToAttach || !location) return;
+
+    setIsSubmitting(true);
+    setActionError("");
+
+    try {
+      const docRef = doc(db, "documents", selectedDocIdToAttach);
+      await updateDoc(docRef, {
+        archive_location_id: location.id,
+        archive_location_code: location.location_code,
+        archive_cabinet: location.cabinet,
+        archive_shelf: location.shelf,
+        archive_folder: location.folder,
+        archive_folder_name: location.folder_name || location.sequence,
+        status: "archived",
+        updatedAt: serverTimestamp(),
+        updated_by: appUser?.displayName || "เจ้าหน้าที่",
+      });
+
+      setActionSuccess("นำเอกสารเข้าแฟ้มจัดเก็บเรียบร้อยแล้ว");
+      setIsAttachModalOpen(false);
+      setTimeout(() => setActionSuccess(""), 4000);
+      await fetchArchiveDetail();
+    } catch (err: any) {
+      console.error(err);
+      setActionError("เกิดข้อผิดพลาดในการนำเอกสารเข้าแฟ้ม: " + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (loading) return <div className="p-12 text-center text-gray-500">กำลังโหลดข้อมูลคลังเอกสาร...</div>;
   if (!location) return <div className="p-12 text-center text-red-500">ไม่พบจุดจัดเก็บเอกสาร</div>;
 
@@ -492,83 +743,200 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
       </div>
 
       {/* Document List In This Archive */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-          <h2 className="text-base font-bold text-gray-900 flex items-center">
-            <FileText className="w-5 h-5 mr-2 text-red-600" />
-            รายการเอกสารที่จัดเก็บในแฟ้มนี้ ({documents.length} ฉบับ)
-          </h2>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-4 border-b border-gray-200 bg-gray-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center space-x-2">
+            <FileText className="w-5 h-5 text-red-600" />
+            <h2 className="text-base font-bold text-gray-900">
+              รายการเอกสารที่จัดเก็บในแฟ้มนี้ ({documents.length} ฉบับ)
+            </h2>
+          </div>
+          {appUser?.role !== 'viewer' && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleOpenAttachModal}
+                className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-white bg-white/60 shadow-xs transition-colors"
+                title="ดึงเอกสารในระบบที่ยังไม่ได้จัดเก็บเข้าแฟ้มนี้"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                ดึงเอกสารในระบบเข้าแฟ้ม
+              </button>
+              <button
+                type="button"
+                onClick={() => handleOpenHistoricalModal()}
+                className="inline-flex items-center px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-md shadow-red-200 transition-colors"
+              >
+                <History className="w-3.5 h-3.5 mr-1.5" />
+                + บันทึกเรื่องเก่าย้อนหลัง
+              </button>
+            </div>
+          )}
         </div>
 
         {documents.length === 0 ? (
           <div className="p-12 text-center text-gray-500">
             <Folder className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-base font-medium text-gray-700">ยังไม่มีเอกสารในแฟ้มนี้</p>
-            <p className="text-xs text-gray-400 mt-1">
-              สามารถจัดเก็บเอกสารเข้าแฟ้มนี้ได้จากหน้ารายละเอียดหนังสือรับหรือหนังสือส่ง
+            <p className="text-base font-bold text-gray-700">ยังไม่มีเอกสารในแฟ้มนี้</p>
+            <p className="text-xs text-gray-400 mt-1 mb-4">
+              สามารถบันทึกเรื่องเก่า/เอกสารย้อนหลัง หรือดึงเอกสารรับ-ส่งในระบบเข้าแฟ้มนี้ได้ทันที
             </p>
+            {appUser?.role !== 'viewer' && (
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleOpenHistoricalModal()}
+                  className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-md shadow-red-200 transition-colors"
+                >
+                  <History className="w-4 h-4 mr-1.5" />
+                  + บันทึกเรื่องเก่าย้อนหลังเข้าแฟ้มนี้
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenAttachModal}
+                  className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-semibold shadow-xs transition-colors"
+                >
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  ดึงเอกสารในระบบเข้าแฟ้ม
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ประเภท</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เลขที่หนังสือ</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">วันที่</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เรื่อง</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จาก / เรียน</th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">การจัดการ</th>
+                  <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ประเภท</th>
+                  <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เลขที่หนังสือ / ทะเบียน</th>
+                  <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">วันที่</th>
+                  <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เรื่อง</th>
+                  <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จาก / เรียน</th>
+                  <th scope="col" className="px-5 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">การจัดการ</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {documents.map((doc) => (
-                  <tr key={doc.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {doc.document_type === 'incoming' ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                          <Inbox className="w-3 h-3 mr-1" />
-                          หนังสือรับ
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <Send className="w-3 h-3 mr-1" />
-                          หนังสือส่ง
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold font-mono text-blue-700">
-                      <Link href={`/${doc.document_type}/${doc.id}`} className="hover:underline">
-                        {doc.running_number}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatToBuddhistEra(doc.document_date || doc.sent_date || doc.received_date)}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate font-medium">
-                      {doc.subject}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {doc.document_type === 'incoming' ? doc.sender : doc.recipient}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
-                      <Link 
-                        href={`/${doc.document_type}/${doc.id}`} 
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        เปิดดู
-                      </Link>
-                      {appUser?.role !== 'viewer' && (
-                        <button 
-                          onClick={() => handleRemoveDocFromArchive(doc.id, doc.subject)}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          นำออกจากแฟ้ม
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {documents.map((doc) => {
+                  const isHist = doc.document_type === 'historical' || doc.is_historical;
+                  return (
+                    <tr key={doc.id} className="hover:bg-red-50/20 transition-colors">
+                      <td className="px-5 py-3.5 whitespace-nowrap text-sm">
+                        {isHist ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                            <History className="w-3 h-3 mr-1 text-amber-600" />
+                            {doc.historical_type || "เรื่องเก่าย้อนหลัง"}
+                          </span>
+                        ) : doc.document_type === 'incoming' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                            <Inbox className="w-3 h-3 mr-1" />
+                            หนังสือรับ
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <Send className="w-3 h-3 mr-1" />
+                            หนังสือส่ง
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 whitespace-nowrap text-sm font-bold font-mono">
+                        {isHist ? (
+                          <button
+                            type="button"
+                            onClick={() => setViewingHistoricalDoc(doc)}
+                            className="text-amber-800 hover:text-amber-900 hover:underline font-mono"
+                          >
+                            {doc.document_number || doc.running_number}
+                          </button>
+                        ) : (
+                          <Link href={`/${doc.document_type}/${doc.id}`} className="text-red-700 hover:text-red-900 hover:underline">
+                            {doc.running_number}
+                          </Link>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 whitespace-nowrap text-xs text-gray-500">
+                        {formatToBuddhistEra(doc.document_date || doc.sent_date || doc.received_date)}
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-gray-900 max-w-xs">
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-gray-800 truncate" title={doc.subject}>
+                            {doc.subject}
+                          </span>
+                          {(doc.google_drive_link || doc.drive_links?.[0]?.url) && (
+                            <a
+                              href={doc.google_drive_link || doc.drive_links?.[0]?.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center text-[11px] text-blue-600 hover:text-blue-800 hover:underline mt-0.5"
+                            >
+                              <ExternalLink className="w-3 h-3 mr-1" />
+                              เปิดไฟล์ Google Drive
+                            </a>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 whitespace-nowrap text-xs text-gray-600">
+                        {isHist ? (
+                          <span>
+                            {doc.sender && doc.sender !== "-" ? `จาก: ${doc.sender}` : ""} 
+                            {doc.recipient && doc.recipient !== "-" ? ` ถึง: ${doc.recipient}` : ""}
+                            {!doc.sender && !doc.recipient && "-"}
+                          </span>
+                        ) : (
+                          doc.document_type === 'incoming' ? doc.sender : doc.recipient
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 whitespace-nowrap text-right text-xs font-medium space-x-2">
+                        {isHist ? (
+                          <>
+                            <button 
+                              type="button"
+                              onClick={() => setViewingHistoricalDoc(doc)}
+                              className="text-blue-600 hover:text-blue-800 font-semibold"
+                            >
+                              ดูข้อมูล
+                            </button>
+                            {appUser?.role !== 'viewer' && (
+                              <>
+                                <button 
+                                  type="button"
+                                  onClick={() => handleOpenHistoricalModal(doc)}
+                                  className="text-gray-600 hover:text-gray-900 font-semibold"
+                                >
+                                  แก้ไข
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => handleDeleteHistoricalDoc(doc.id, doc.subject)}
+                                  className="text-red-500 hover:text-red-700 font-semibold"
+                                >
+                                  ลบ
+                                </button>
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <Link 
+                              href={`/${doc.document_type}/${doc.id}`} 
+                              className="text-blue-600 hover:text-blue-800 font-semibold"
+                            >
+                              เปิดดู
+                            </Link>
+                            {appUser?.role !== 'viewer' && (
+                              <button 
+                                type="button"
+                                onClick={() => handleRemoveDocFromArchive(doc.id, doc.subject)}
+                                className="text-red-500 hover:text-red-700 font-semibold"
+                              >
+                                นำออกจากแฟ้ม
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -836,6 +1204,440 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
             <p className="text-xs text-gray-400 mt-2 text-center">
               กดที่พื้นที่ว่างหรือปุ่ม X เพื่อปิดหน้าต่าง
             </p>
+          </div>
+        </div>
+      )}
+      {/* ========================================================
+          MODAL 3: บันทึก / แก้ไขเรื่องเก่า / เอกสารย้อนหลัง
+          ======================================================== */}
+      {isHistoricalModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b">
+              <h3 className="text-base font-bold text-gray-900 flex items-center">
+                <History className="w-5 h-5 mr-2 text-red-600" />
+                {editingHistoricalId ? "แก้ไขข้อมูลเรื่องเก่า / เอกสารย้อนหลัง" : "บันทึกเรื่องเก่า / เอกสารย้อนหลังเข้าแฟ้ม"}
+              </h3>
+              <button 
+                onClick={() => setIsHistoricalModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-full"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Folder Target Banner */}
+            <div className="mt-3 bg-red-50/70 border border-red-200 rounded-xl p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <div>
+                <span className="text-gray-500">จัดเก็บเข้าแฟ้ม:</span>{" "}
+                <span className="font-bold text-red-950">{location.folder_name || location.sequence}</span>
+                <span className="text-red-700 ml-1.5">(ตู้ {location.cabinet} / ชั้น {location.shelf})</span>
+              </div>
+              <span className="font-mono font-bold text-red-700 bg-white px-2 py-0.5 rounded border border-red-200 shrink-0">
+                {location.location_code}
+              </span>
+            </div>
+
+            {actionError && (
+              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+                {actionError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveHistoricalDoc} className="mt-4 space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  เรื่อง / ชื่อเอกสาร <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  required
+                  value={historicalForm.subject}
+                  onChange={(e) => setHistoricalForm({ ...historicalForm, subject: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  placeholder="เช่น ขออนุมัติจัดซื้ออุปกรณ์สำนักงานประจำปี 2565"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    ประเภทเอกสารย้อนหลัง
+                  </label>
+                  <select
+                    value={historicalForm.historical_type}
+                    onChange={(e) => setHistoricalForm({ ...historicalForm, historical_type: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                  >
+                    <option value="หนังสือรับ (ย้อนหลัง)">หนังสือรับ (ย้อนหลัง)</option>
+                    <option value="หนังสือส่ง (ย้อนหลัง)">หนังสือส่ง (ย้อนหลัง)</option>
+                    <option value="คำสั่ง / ประกาศ">คำสั่ง / ประกาศ</option>
+                    <option value="รายงาน / สรุปผลการปฏิบัติงาน">รายงาน / สรุปผลการปฏิบัติงาน</option>
+                    <option value="สัญญา / เอกสารทางกฎหมาย">สัญญา / เอกสารทางกฎหมาย</option>
+                    <option value="บันทึกข้อความภายใน">บันทึกข้อความภายใน</option>
+                    <option value="เอกสารทั่วไป / อื่นๆ">เอกสารทั่วไป / อื่นๆ</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    ปี พ.ศ. ของเอกสาร
+                  </label>
+                  <input 
+                    type="text" 
+                    value={historicalForm.historical_year}
+                    onChange={(e) => setHistoricalForm({ ...historicalForm, historical_year: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="เช่น 2564, 2565, 2566"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    เลขที่หนังสือ / เลขทะเบียนเดิม
+                  </label>
+                  <input 
+                    type="text" 
+                    value={historicalForm.document_number}
+                    onChange={(e) => setHistoricalForm({ ...historicalForm, document_number: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="เช่น ปณท(สท) 124/2565"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    ลงวันที่เอกสาร
+                  </label>
+                  <input 
+                    type="date" 
+                    value={historicalForm.document_date}
+                    onChange={(e) => {
+                      const newDate = e.target.value;
+                      const yr = newDate ? String(new Date(newDate).getFullYear() + 543) : historicalForm.historical_year;
+                      setHistoricalForm({ 
+                        ...historicalForm, 
+                        document_date: newDate,
+                        historical_year: yr 
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    จาก (หน่วยงานผู้ส่ง / ต้นเรื่อง)
+                  </label>
+                  <input 
+                    type="text" 
+                    value={historicalForm.sender}
+                    onChange={(e) => setHistoricalForm({ ...historicalForm, sender: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="เช่น ปณท สำนักงานใหญ่, ฝ่ายการเงิน"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    ถึง / เรียน (หน่วยงานผู้รับ)
+                  </label>
+                  <input 
+                    type="text" 
+                    value={historicalForm.recipient}
+                    onChange={(e) => setHistoricalForm({ ...historicalForm, recipient: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="เช่น ผจก.ไปรษณีย์จังหวัดสุโขทัย"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    ลิงก์ Google Drive (ไฟล์สแกน PDF)
+                  </label>
+                  <input 
+                    type="url" 
+                    value={historicalForm.google_drive_link}
+                    onChange={(e) => setHistoricalForm({ ...historicalForm, google_drive_link: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="https://drive.google.com/..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    จำนวนแผ่น
+                  </label>
+                  <input 
+                    type="text" 
+                    value={historicalForm.page_count}
+                    onChange={(e) => setHistoricalForm({ ...historicalForm, page_count: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="เช่น 3 แผ่น"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  หมายเหตุ / รายละเอียดการจัดเก็บเพิ่มเติม
+                </label>
+                <textarea 
+                  rows={2}
+                  value={historicalForm.notes}
+                  onChange={(e) => setHistoricalForm({ ...historicalForm, notes: e.target.value })}
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  placeholder="เช่น เอกสารต้นฉบับเย็บเล่มรวมกับสัญญาปี 2565"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-3 border-t">
+                <button 
+                  type="button"
+                  onClick={() => setIsHistoricalModalOpen(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  ยกเลิก
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex items-center px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold shadow-md shadow-red-200 transition-colors disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {isSubmitting ? "กำลังบันทึก..." : (editingHistoricalId ? "บันทึกการแก้ไข" : "บันทึกเข้าแฟ้ม")}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL 4: ดูข้อมูลเรื่องเก่า / เอกสารย้อนหลัง
+          ======================================================== */}
+      {viewingHistoricalDoc && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between pb-3 border-b">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="px-2.5 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                    <History className="w-3.5 h-3.5 inline mr-1 text-amber-600" />
+                    {viewingHistoricalDoc.historical_type || "เรื่องเก่าย้อนหลัง"}
+                  </span>
+                  {viewingHistoricalDoc.historical_year && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-bold">
+                      พ.ศ. {viewingHistoricalDoc.historical_year}
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 mt-1">
+                  {viewingHistoricalDoc.subject}
+                </h3>
+              </div>
+              <button 
+                onClick={() => setViewingHistoricalDoc(null)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-full shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-3.5 text-sm">
+              <div className="grid grid-cols-2 gap-3 bg-gray-50/80 p-3.5 rounded-xl border border-gray-100">
+                <div>
+                  <span className="text-xs text-gray-500 block">เลขที่หนังสือ / ทะเบียนเดิม</span>
+                  <span className="font-mono font-bold text-gray-900 mt-0.5 block">
+                    {viewingHistoricalDoc.document_number || viewingHistoricalDoc.running_number || "-"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 block">ลงวันที่เอกสาร</span>
+                  <span className="font-semibold text-gray-900 mt-0.5 block">
+                    {formatToBuddhistEra(viewingHistoricalDoc.document_date)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 block">จาก (ต้นเรื่อง)</span>
+                  <span className="text-gray-900 mt-0.5 block font-medium">
+                    {viewingHistoricalDoc.sender || "-"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 block">ถึง (ผู้รับ)</span>
+                  <span className="text-gray-900 mt-0.5 block font-medium">
+                    {viewingHistoricalDoc.recipient || "-"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Physical Location */}
+              <div className="bg-red-50/60 border border-red-100 rounded-xl p-3 text-xs">
+                <span className="text-red-700 font-semibold block mb-1">📍 ตำแหน่งจัดเก็บทางกายภาพ:</span>
+                <p className="text-gray-800">
+                  <strong>ตู้ {viewingHistoricalDoc.archive_cabinet || location.cabinet}</strong> • 
+                  ชั้นวาง <strong>{viewingHistoricalDoc.archive_shelf || location.shelf}</strong> • 
+                  แฟ้ม <strong>{viewingHistoricalDoc.archive_folder_name || location.folder_name || location.sequence}</strong>
+                </p>
+                <p className="font-mono text-red-700 font-bold mt-1">
+                  รหัสสถานที่: {viewingHistoricalDoc.archive_location_code || location.location_code}
+                </p>
+              </div>
+
+              {/* Google Drive Link */}
+              {(viewingHistoricalDoc.google_drive_link || viewingHistoricalDoc.drive_links?.[0]?.url) && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-blue-900 block">ไฟล์สแกนเอกสารเดิม (Google Drive)</span>
+                    <span className="text-xs text-blue-700 block truncate max-w-xs">
+                      {viewingHistoricalDoc.google_drive_link || viewingHistoricalDoc.drive_links?.[0]?.url}
+                    </span>
+                  </div>
+                  <a
+                    href={viewingHistoricalDoc.google_drive_link || viewingHistoricalDoc.drive_links?.[0]?.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs shrink-0"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 mr-1" />
+                    เปิดดูไฟล์
+                  </a>
+                </div>
+              )}
+
+              {/* Notes */}
+              {viewingHistoricalDoc.notes && (
+                <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                  <span className="text-xs font-semibold text-gray-500 block mb-0.5">หมายเหตุ</span>
+                  <p className="text-xs text-gray-700 whitespace-pre-wrap">{viewingHistoricalDoc.notes}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center pt-3 border-t">
+              {appUser?.role !== 'viewer' ? (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteHistoricalDoc(viewingHistoricalDoc.id, viewingHistoricalDoc.subject)}
+                  className="text-xs text-red-600 hover:text-red-800 font-medium"
+                >
+                  ลบรายการนี้
+                </button>
+              ) : <div />}
+              <div className="flex space-x-2">
+                {appUser?.role !== 'viewer' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const docToEdit = viewingHistoricalDoc;
+                      setViewingHistoricalDoc(null);
+                      handleOpenHistoricalModal(docToEdit);
+                    }}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-semibold"
+                  >
+                    แก้ไขข้อมูล
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setViewingHistoricalDoc(null)}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-xs"
+                >
+                  ปิด
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL 5: ดึงเอกสารในระบบเข้าแฟ้มนี้
+          ======================================================== */}
+      {isAttachModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b">
+              <h3 className="text-base font-bold text-gray-900 flex items-center">
+                <Plus className="w-5 h-5 mr-2 text-red-600" />
+                ดึงเอกสารในระบบเข้าแฟ้มนี้
+              </h3>
+              <button 
+                onClick={() => setIsAttachModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-full"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mt-3 bg-red-50/70 border border-red-200 rounded-xl p-3 text-xs">
+              <span className="text-gray-500">แฟ้มปลายทาง:</span>{" "}
+              <span className="font-bold text-red-950">{location.folder_name || location.sequence}</span>
+              <span className="text-red-700 ml-1.5">(รหัส: {location.location_code})</span>
+            </div>
+
+            {actionError && (
+              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+                {actionError}
+              </div>
+            )}
+
+            <form onSubmit={handleAttachDocToArchive} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                  เลือกเอกสารที่ยังไม่ได้จัดเก็บเข้าแฟ้ม ({unarchivedDocs.length} ฉบับ) <span className="text-red-500">*</span>
+                </label>
+                
+                {loadingUnarchived ? (
+                  <div className="py-8 text-center text-xs text-gray-500">
+                    กำลังโหลดรายชื่อเอกสาร...
+                  </div>
+                ) : unarchivedDocs.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                    ไม่พบเอกสารที่ยังไม่ได้รับการจัดเก็บเข้าแฟ้ม
+                  </div>
+                ) : (
+                  <select
+                    required
+                    value={selectedDocIdToAttach}
+                    onChange={(e) => setSelectedDocIdToAttach(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                    size={6}
+                  >
+                    {unarchivedDocs.map((d) => (
+                      <option key={d.id} value={d.id} className="py-1">
+                        [{d.document_type === 'incoming' ? 'รับ' : 'ส่ง'}] {d.running_number} — {d.subject}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-3 border-t">
+                <button 
+                  type="button"
+                  onClick={() => setIsAttachModalOpen(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  ยกเลิก
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isSubmitting || !selectedDocIdToAttach}
+                  className="flex items-center px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold shadow-md shadow-red-200 transition-colors disabled:opacity-50"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  {isSubmitting ? "กำลังบันทึก..." : "ยืนยันนำเข้าแฟ้ม"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

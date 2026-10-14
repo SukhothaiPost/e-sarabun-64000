@@ -1,5 +1,5 @@
 export type Role = 'super_admin' | 'admin' | 'officer' | 'viewer';
-export type DocumentType = 'incoming' | 'outgoing' | 'internal';
+export type DocumentType = 'incoming' | 'outgoing' | 'internal' | 'historical';
 export type Urgency = 'ปกติ' | 'ด่วน' | 'ด่วนมาก' | 'ด่วนที่สุด';
 export type DocumentStatus = 'registered' | 'assigned' | 'in_progress' | 'completed' | 'archived' | 'closed';
 
@@ -43,6 +43,7 @@ export interface SarabanDocument {
   tracking_number?: string;
   courier?: string;
   drive_links: DriveLink[];
+  google_drive_link?: string;
   archive_location_id: string;
   archive_location_code?: string;
   archive_cabinet?: string;
@@ -50,6 +51,10 @@ export interface SarabanDocument {
   archive_folder?: string;
   archive_folder_name?: string;
   related_documents: string[];
+  is_historical?: boolean;
+  historical_year?: string;
+  historical_type?: string;
+  page_count?: string;
   created_by: string;
   updated_by: string;
   closed_at?: any;

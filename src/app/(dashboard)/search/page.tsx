@@ -5,7 +5,7 @@ import { collection, query, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { SarabanDocument } from "@/types";
 import { formatToBuddhistEra } from "@/lib/dateUtils";
-import { Search, FileText, Inbox, Send, ArrowRight, X } from "lucide-react";
+import { Search, FileText, Inbox, Send, ArrowRight, X, History } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function SearchPage() {
@@ -70,6 +70,8 @@ export default function SearchPage() {
       (d.sender && d.sender.toLowerCase().includes(term)) ||
       (d.recipient && d.recipient.toLowerCase().includes(term)) ||
       (d.notes && d.notes.toLowerCase().includes(term)) ||
+      (d.historical_type && d.historical_type.toLowerCase().includes(term)) ||
+      (d.historical_year && d.historical_year.toLowerCase().includes(term)) ||
       (d.tracking_number && d.tracking_number.toLowerCase().includes(term)) ||
       (d.archive_location_code && d.archive_location_code.toLowerCase().includes(term)) ||
       (d.archive_folder && d.archive_folder.toLowerCase().includes(term))
@@ -96,7 +98,15 @@ export default function SearchPage() {
     setHasSearched(false);
   };
 
-  const getDocTypeBadge = (type: string) => {
+  const getDocTypeBadge = (type: string, doc?: SarabanDocument) => {
+    if (type === 'historical' || doc?.is_historical) {
+      return (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+          <History className="w-3.5 h-3.5 mr-1 text-amber-600" />
+          {doc?.historical_type || "เรื่องเก่าย้อนหลัง"}
+        </span>
+      );
+    }
     if (type === 'incoming') {
       return (
         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
@@ -195,12 +205,18 @@ export default function SearchPage() {
               {filteredDocuments.map(doc => (
                 <div 
                   key={doc.id} 
-                  onClick={() => router.push(`/${doc.document_type}/${doc.id}`)}
+                  onClick={() => {
+                    if (doc.document_type === 'historical' || doc.is_historical) {
+                      router.push(doc.archive_location_id ? `/archive/${doc.archive_location_id}` : '/archive');
+                    } else {
+                      router.push(`/${doc.document_type}/${doc.id}`);
+                    }
+                  }}
                   className="p-5 hover:bg-red-50/30 cursor-pointer transition-colors group"
                 >
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-2">
                     <div className="flex items-center space-x-3">
-                      {getDocTypeBadge(doc.document_type)}
+                      {getDocTypeBadge(doc.document_type, doc)}
                       <span className="font-mono font-bold text-red-700 text-base">
                         {doc.running_number}
                       </span>
