@@ -9,6 +9,23 @@ import { SarabanDocument } from "@/types";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
+const RECIPIENT_ORGANIZATIONS = [
+  "ปข.6",
+  "ปณ.สวรรคโลก",
+  "ปณ.ศรีสำโรง",
+  "ปณ.ศรีสัชนาลัย",
+  "ปณ.บ้านด่านลานหอย",
+  "ปณ.ทุ่งเสลี่ยม",
+  "ปณ.คีรีมาศ",
+  "ปณ.กงไกรลาศ",
+  "ปณ.ศรีนคร",
+  "ปณ.ท่าชัย",
+  "ปณ.เมืองเก่า",
+  "ปณ.บ้านสวน",
+  "ปณ.บ้านใหม่ไชยมงคล",
+  "อื่นๆ (ระบุเอง)"
+];
+
 export default function NewOutgoingDocumentPage() {
   const { appUser } = useAuth();
   const router = useRouter();
@@ -17,12 +34,14 @@ export default function NewOutgoingDocumentPage() {
   const [incomingDocs, setIncomingDocs] = useState<SarabanDocument[]>([]);
   const [runningNumber, setRunningNumber] = useState("");
 
+  const [recipientOption, setRecipientOption] = useState("ปข.6");
+  const [customRecipient, setCustomRecipient] = useState("");
+
   // Form State
   const [formData, setFormData] = useState({
     document_date: new Date().toISOString().split('T')[0],
     sent_date: new Date().toISOString().split('T')[0],
     subject: "",
-    recipient: "",
     notes: "",
     related_document_id: "",
   });
@@ -77,6 +96,12 @@ export default function NewOutgoingDocumentPage() {
       return;
     }
 
+    const finalRecipient = recipientOption === "อื่นๆ (ระบุเอง)" ? customRecipient.trim() : recipientOption;
+    if (!finalRecipient) {
+      setError("กรุณาระบุหน่วยงานผู้รับ");
+      return;
+    }
+
     setIsSubmitting(true);
     setError("");
 
@@ -118,7 +143,7 @@ export default function NewOutgoingDocumentPage() {
           subject: formData.subject,
           description: "",
           sender: appUser.department || "สำนักงาน",
-          recipient: formData.recipient,
+          recipient: finalRecipient,
           department: appUser.department || "สำนักงาน",
           urgency: "ปกติ",
           confidentiality: "ปกติ",
@@ -231,17 +256,30 @@ export default function NewOutgoingDocumentPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                เรียน (ผู้รับ) <span className="text-red-500">*</span>
+                เรียน (หน่วยงานผู้รับ) <span className="text-red-500">*</span>
               </label>
-              <input 
-                type="text" 
-                name="recipient" 
-                required 
-                value={formData.recipient} 
-                onChange={handleChange} 
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" 
-                placeholder="ชื่อบุคคล หรือชื่อหน่วยงานผู้รับ" 
-              />
+              <select
+                value={recipientOption}
+                onChange={(e) => setRecipientOption(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
+              >
+                {RECIPIENT_ORGANIZATIONS.map((org) => (
+                  <option key={org} value={org}>{org}</option>
+                ))}
+              </select>
+
+              {recipientOption === "อื่นๆ (ระบุเอง)" && (
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    required
+                    value={customRecipient}
+                    onChange={(e) => setCustomRecipient(e.target.value)}
+                    placeholder="กรุณาระบุชื่อหน่วยงานหรือบุคคลผู้รับ..."
+                    className="w-full px-4 py-2 border border-emerald-400 rounded-md focus:ring-emerald-500 focus:border-emerald-500 bg-emerald-50/30"
+                  />
+                </div>
+              )}
             </div>
 
             <div>
