@@ -55,6 +55,13 @@ service cloud.firestore {
       allow write: if hasAdminOrSuperAdmin();
     }
 
+    // Postal Trackings Collection
+    match /postal_trackings/{trackingId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && !isViewer();
+      allow delete: if hasAdminOrSuperAdmin();
+    }
+
     // System Configs Collection
     match /system_configs/{configId} {
       allow read: if isAuthenticated();

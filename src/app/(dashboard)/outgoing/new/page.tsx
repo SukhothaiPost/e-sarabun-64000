@@ -31,6 +31,8 @@ export default function NewOutgoingDocumentPage() {
     responsible_user_id: "",
     notes: "",
     related_document_id: "",
+    tracking_number: "",
+    courier: "ไปรษณีย์ไทย (EMS)",
   });
 
   useEffect(() => {
@@ -111,6 +113,8 @@ export default function NewOutgoingDocumentPage() {
           responsible_user_id: formData.responsible_user_id,
           status: "registered",
           notes: formData.notes,
+          tracking_number: formData.tracking_number.trim().toUpperCase(),
+          courier: formData.courier,
           drive_links: [],
           archive_location_id: "",
           related_documents: formData.related_document_id ? [formData.related_document_id] : [],
@@ -121,6 +125,27 @@ export default function NewOutgoingDocumentPage() {
           deleted: false,
         };
         transaction.set(newDocRef, docData);
+
+        // If tracking number provided, also record in postal_trackings
+        if (formData.tracking_number.trim()) {
+          const postalRef = doc(collection(db, "postal_trackings"));
+          transaction.set(postalRef, {
+            id: postalRef.id,
+            tracking_number: formData.tracking_number.trim().toUpperCase(),
+            courier: formData.courier,
+            source_type: "outgoing_doc",
+            outgoing_doc_id: newDocRef.id,
+            outgoing_running_number: runningNumber,
+            subject: formData.subject.trim(),
+            recipient_name: formData.recipient.trim(),
+            sent_date: formData.sent_date ? new Date(formData.sent_date) : new Date(),
+            notes: formData.notes.trim(),
+            created_by: appUser.displayName || "เจ้าหน้าที่",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            deleted: false,
+          });
+        }
 
         // Link back from the incoming document if selected
         if (formData.related_document_id) {
@@ -212,6 +237,41 @@ export default function NewOutgoingDocumentPage() {
                   </option>
                 ))}
               </select>
+          </div>
+        </div>
+
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b">ข้อมูลการจัดส่งพัสดุ / ไปรษณีย์ (Tracking)</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">เลข Tracking พัสดุ (ถ้ามี)</label>
+              <input 
+                type="text" 
+                name="tracking_number" 
+                value={formData.tracking_number} 
+                onChange={handleChange} 
+                className="w-full px-4 py-2 border border-gray-300 rounded-md font-mono uppercase focus:ring-blue-500 focus:border-blue-500" 
+                placeholder="เช่น ED123456789TH" 
+              />
+              <p className="text-xs text-gray-500 mt-1">สามารถบันทึกหรือเพิ่มภายหลังในเมนู บันทึกเลข Tracking ได้</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">ผู้ให้บริการจัดส่ง</label>
+              <select 
+                name="courier" 
+                value={formData.courier} 
+                onChange={handleChange} 
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="ไปรษณีย์ไทย (EMS)">ไปรษณีย์ไทย (EMS)</option>
+                <option value="ไปรษณีย์ไทย (ลงทะเบียน)">ไปรษณีย์ไทย (ลงทะเบียน)</option>
+                <option value="ไปรษณีย์ไทย (พัสดุในประเทศ)">ไปรษณีย์ไทย (พัสดุในประเทศ)</option>
+                <option value="Flash Express">Flash Express</option>
+                <option value="Kerry Express">Kerry Express</option>
+                <option value="J&T Express">J&T Express</option>
+                <option value="อื่นๆ">อื่นๆ</option>
+              </select>
+            </div>
           </div>
         </div>
 

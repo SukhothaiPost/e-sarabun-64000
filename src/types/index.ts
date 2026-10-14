@@ -40,6 +40,8 @@ export interface SarabanDocument {
   responsible_user_id: string;
   status: DocumentStatus;
   notes: string;
+  tracking_number?: string;
+  courier?: string;
   drive_links: DriveLink[];
   archive_location_id: string;
   related_documents: string[];
@@ -51,6 +53,25 @@ export interface SarabanDocument {
   deleted: boolean;
   deleted_at?: any;
   deleted_by?: string;
+}
+
+export interface PostalTracking {
+  id: string;
+  tracking_number: string;
+  courier: string;
+  source_type: 'outgoing_doc' | 'standalone';
+  outgoing_doc_id?: string;
+  outgoing_running_number?: string;
+  subject: string;
+  recipient_name: string;
+  recipient_address?: string;
+  sent_date: any;
+  fee?: number;
+  notes?: string;
+  created_by: string;
+  createdAt: any;
+  updatedAt: any;
+  deleted: boolean;
 }
 
 export interface ArchiveLocation {

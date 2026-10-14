@@ -17,7 +17,8 @@ import {
   Settings,
   LogOut,
   Menu,
-  X
+  X,
+  Truck
 } from "lucide-react";
 import { useState, Suspense } from "react";
 
@@ -25,9 +26,9 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['super_admin', 'admin', 'officer', 'viewer'] },
   { name: 'หนังสือรับ', href: '/incoming', icon: Inbox, roles: ['super_admin', 'admin', 'officer', 'viewer'] },
   { name: 'หนังสือส่ง', href: '/outgoing', icon: Send, roles: ['super_admin', 'admin', 'officer', 'viewer'] },
-  { name: 'งานของฉัน', href: '/my-tasks', icon: Briefcase, roles: ['super_admin', 'admin', 'officer'] },
-  { name: 'ค้นหาเอกสาร', href: '/search', icon: Search, roles: ['super_admin', 'admin', 'officer', 'viewer'] },
+  { name: 'บันทึกเลข Tracking', href: '/tracking', icon: Truck, roles: ['super_admin', 'admin', 'officer', 'viewer'] },
   { name: 'คลังเอกสาร', href: '/archive', icon: Archive, roles: ['super_admin', 'admin', 'officer', 'viewer'] },
+  { name: 'ค้นหาเอกสาร', href: '/search', icon: Search, roles: ['super_admin', 'admin', 'officer', 'viewer'] },
   { name: 'รายงาน', href: '/reports', icon: BarChart3, roles: ['super_admin', 'admin'] },
   { name: 'ผู้ใช้งาน', href: '/users', icon: Users, roles: ['super_admin'] },
   { name: 'ตั้งค่าระบบ', href: '/settings', icon: Settings, roles: ['super_admin', 'admin'] },
