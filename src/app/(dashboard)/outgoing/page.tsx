@@ -109,14 +109,13 @@ export default function OutgoingDocumentsPage() {
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">วันที่ส่ง</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เรื่อง</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เรียน (ผู้รับ)</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tracking พัสดุ</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">สถานะ</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
                     <div className="flex justify-center mb-4">
                       <div className="h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                     </div>
@@ -125,7 +124,7 @@ export default function OutgoingDocumentsPage() {
                 </tr>
               ) : filteredDocs.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
                     ไม่พบข้อมูลหนังสือส่ง
                   </td>
                 </tr>
@@ -136,15 +135,6 @@ export default function OutgoingDocumentsPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatToBuddhistEra(doc.sent_date)}</td>
                     <td className="px-6 py-4 text-sm text-gray-900 max-w-md truncate">{doc.subject}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{doc.recipient}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {doc.tracking_number ? (
-                        <span className="font-mono text-xs font-bold bg-blue-50 text-blue-700 px-2.5 py-1 rounded border border-blue-200">
-                          {doc.tracking_number}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 text-xs">-</span>
-                      )}
-                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(doc.status)}</td>
                   </tr>
                 ))
