@@ -396,12 +396,12 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      {/* Cabinet & Shelf Photo Card */}
+      {/* Cabinet Photo Card */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4 pb-2 border-b">
           <div className="flex items-center space-x-2">
             <Camera className="w-5 h-5 text-red-600" />
-            <h2 className="text-base font-bold text-gray-900">รูปภาพตู้และชั้นจัดเก็บ</h2>
+            <h2 className="text-base font-bold text-gray-900">รูปภาพตู้เอกสารจัดเก็บ</h2>
           </div>
           {location.image_url && (
             <div className="flex items-center space-x-2">
@@ -432,7 +432,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
             >
               <img 
                 src={location.image_url} 
-                alt={`รูปภาพตู้ ${location.cabinet} ชั้น ${location.shelf}`}
+                alt={`รูปภาพตู้ ${location.cabinet}`}
                 className="w-full h-56 object-cover group-hover:scale-105 transition-transform duration-300" 
               />
               <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-medium text-xs backdrop-blur-[2px]">
@@ -440,7 +440,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                 คลิกเพื่อดูรูปภาพขนาดใหญ่
               </div>
               <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-sm text-white px-2 py-0.5 rounded text-[11px] font-mono">
-                ตู้ {location.cabinet} / ชั้น {location.shelf}
+                ตู้ {location.cabinet}
               </div>
             </div>
 
@@ -457,7 +457,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
 
               <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100 space-y-1">
                 <p className="font-semibold text-gray-700">💡 คำแนะนำการค้นหา:</p>
-                <p>คลิกที่รูปภาพเพื่อเปิดดูภาพขยายความละเอียดสูง ช่วยให้เจ้าหน้าที่มองเห็นตู้เอกสารจริงและจุดจัดวางแฟ้มได้อย่างรวดเร็ว</p>
+                <p>คลิกที่รูปภาพเพื่อเปิดดูภาพขยายความละเอียดสูง ช่วยให้เจ้าหน้าที่มองเห็นตู้เอกสารจริงได้อย่างรวดเร็ว (ชั้นและแฟ้มไม่มีรูปถ่าย)</p>
               </div>
 
               {appUser?.role !== 'viewer' && (
@@ -466,7 +466,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                   className="inline-flex items-center text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-lg shadow-xs transition-colors"
                 >
                   <Edit className="w-3.5 h-3.5 mr-1.5 text-red-600" />
-                  เปลี่ยนรูปภาพตู้/ชั้น
+                  เปลี่ยนรูปภาพตู้เอกสาร
                 </button>
               )}
             </div>
@@ -474,9 +474,9 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
         ) : (
           <div className="p-8 text-center bg-gray-50/70 border border-dashed border-gray-300 rounded-xl">
             <Camera className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm font-medium text-gray-700">ยังไม่มีรูปภาพตู้หรือชั้นจัดเก็บนี้</p>
+            <p className="text-sm font-medium text-gray-700">ยังไม่มีรูปภาพตู้เอกสารนี้</p>
             <p className="text-xs text-gray-400 mt-1 mb-4">
-              เพิ่มรูปถ่ายตู้เอกสารจริง เพื่อให้เจ้าหน้าที่สังเกตและหยิบเอกสารได้รวดเร็ว
+              เพิ่มรูปถ่ายตู้เอกสารจริง เพื่อให้เจ้าหน้าที่สังเกตตำแหน่งตู้ได้รวดเร็ว
             </p>
             {appUser?.role !== 'viewer' && (
               <button 
@@ -484,7 +484,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                 className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-md shadow-red-200 transition-colors"
               >
                 <Camera className="w-4 h-4 mr-1.5" />
-                ถ่ายรูป / เพิ่มรูปภาพตู้และชั้น
+                ถ่ายรูป / เพิ่มรูปภาพตู้เอกสาร
               </button>
             )}
           </div>
@@ -663,14 +663,14 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
               <div className="border border-dashed border-gray-300 rounded-xl p-3 bg-gray-50/60">
                 <label className="block text-xs font-semibold text-gray-800 mb-1 flex items-center">
                   <Camera className="w-3.5 h-3.5 mr-1.5 text-red-600" />
-                  รูปภาพตู้ / ชั้นจัดเก็บ
+                  รูปภาพตู้เอกสารจัดเก็บ
                 </label>
 
                 {editFormData.image_url ? (
                   <div className="relative rounded-lg overflow-hidden border border-gray-200 bg-white max-w-xs mt-2">
                     <img 
                       src={editFormData.image_url} 
-                      alt="รูปภาพตู้/ชั้น" 
+                      alt="รูปภาพตู้เอกสาร" 
                       className="w-full h-36 object-cover rounded-lg"
                     />
                     <button
@@ -702,7 +702,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                         ) : (
                           <>
                             <Camera className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                            <span>ถ่ายรูป / อัปโหลดรูปตู้และชั้น</span>
+                            <span>ถ่ายรูป / อัปโหลดรูปตู้เอกสาร</span>
                           </>
                         )}
                       </div>
@@ -798,7 +798,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      {/* LIGHTBOX MODAL: ดูรูปภาพตู้/ชั้นขนาดเต็ม */}
+      {/* LIGHTBOX MODAL: ดูรูปภาพตู้เอกสารขนาดเต็ม */}
       {isLightboxOpen && location?.image_url && (
         <div 
           className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-200"
@@ -809,7 +809,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
             <div className="flex items-center justify-between w-full text-white mb-3 px-2">
               <div>
                 <h3 className="text-base font-bold">
-                  รูปภาพตู้ {location.cabinet} ชั้น {location.shelf}
+                  รูปภาพตู้ {location.cabinet}
                 </h3>
                 <p className="text-xs text-gray-300 font-mono">
                   {location.location_code} • {location.folder_name || location.sequence}

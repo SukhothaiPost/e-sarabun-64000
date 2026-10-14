@@ -213,17 +213,17 @@ function NewArchiveLocationContent() {
         <div className="border border-dashed border-gray-300 rounded-xl p-4 bg-gray-50/50">
           <label className="block text-sm font-semibold text-gray-800 mb-1 flex items-center">
             <Camera className="w-4 h-4 mr-2 text-red-600" />
-            รูปภาพตู้ / ชั้นจัดเก็บ (ไม่บังคับ)
+            รูปภาพตู้จัดเก็บเอกสาร (ไม่บังคับ)
           </label>
           <p className="text-xs text-gray-500 mb-3">
-            ถ่ายรูปหรือแนบรูปถ่ายตู้จริง / ชั้นจริง เพื่อความสะดวกในการค้นหาเอกสารทางกายภาพ
+            ถ่ายรูปหรือแนบรูปถ่ายตู้เอกสารจริง เพื่อความสะดวกในการค้นหาตำแหน่งตู้จัดเก็บ (ชั้นและแฟ้มไม่ต้องมีรูป)
           </p>
 
           {formData.image_url ? (
             <div className="relative rounded-lg overflow-hidden border border-gray-200 bg-white max-w-sm">
               <img 
                 src={formData.image_url} 
-                alt="รูปภาพตู้/ชั้น" 
+                alt="รูปภาพตู้เอกสาร" 
                 className="w-full h-48 object-cover rounded-lg"
               />
               <button
@@ -255,7 +255,7 @@ function NewArchiveLocationContent() {
                   ) : (
                     <>
                       <Camera className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                      <span>ถ่ายรูป / อัปโหลดรูปภาพตู้และชั้น</span>
+                      <span>ถ่ายรูป / อัปโหลดรูปภาพตู้เอกสาร</span>
                     </>
                   )}
                 </div>

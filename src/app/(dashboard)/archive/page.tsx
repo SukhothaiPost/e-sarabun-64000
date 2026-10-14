@@ -78,9 +78,7 @@ function ArchiveContent() {
   // Modals state
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string; subtitle?: string } | null>(null);
   const [photoModal, setPhotoModal] = useState<{
-    type: "cabinet" | "shelf";
     cabinet: string;
-    shelf?: string;
     title: string;
     currentUrl?: string;
   } | null>(null);
@@ -236,22 +234,17 @@ function ArchiveContent() {
     );
   }, [locations, searchTerm]);
 
-  // Handle Photo Upload
+  // Handle Photo Upload (เฉพาะตู้เอกสาร - ชั้นและแฟ้มไม่ต้องมีรูป)
   const handleOpenPhotoModal = (
-    type: "cabinet" | "shelf",
-    cabinet: string,
-    shelf?: string
+    cabinet: string
   ) => {
     const cabId = normalizeCabinet(cabinet);
-    const shelfId = shelf ? normalizeShelf(shelf) : undefined;
-    const key = type === "cabinet" ? `cabinet_${cabId}` : `shelf_${cabId}_${shelfId}`;
+    const key = `cabinet_${cabId}`;
     const currentUrl = structurePhotos[key] || "";
 
     setPhotoModal({
-      type,
       cabinet: cabId,
-      shelf: shelfId,
-      title: type === "cabinet" ? `รูปภาพ ตู้ ${cabId}` : `รูปภาพ ตู้ ${cabId} / ชั้น ${shelfId}`,
+      title: `รูปถ่าย ตู้ ${cabId}`,
       currentUrl,
     });
     setUploadPreview(currentUrl);
@@ -285,16 +278,14 @@ function ArchiveContent() {
     setModalError("");
 
     try {
-      const key = photoModal.type === "cabinet" 
-        ? `cabinet_${photoModal.cabinet}` 
-        : `shelf_${photoModal.cabinet}_${photoModal.shelf}`;
+      const key = `cabinet_${photoModal.cabinet}`;
 
       const photoDocRef = doc(db, "archive_structure_photos", key);
       await setDoc(photoDocRef, {
         id: key,
-        type: photoModal.type,
+        type: "cabinet",
         cabinet: photoModal.cabinet,
-        shelf: photoModal.shelf || "",
+        shelf: "",
         image_url: finalUrl,
         updatedAt: serverTimestamp(),
       });
@@ -320,16 +311,14 @@ function ArchiveContent() {
 
     setIsProcessing(true);
     try {
-      const key = photoModal.type === "cabinet" 
-        ? `cabinet_${photoModal.cabinet}` 
-        : `shelf_${photoModal.cabinet}_${photoModal.shelf}`;
+      const key = `cabinet_${photoModal.cabinet}`;
 
       const photoDocRef = doc(db, "archive_structure_photos", key);
       await setDoc(photoDocRef, {
         id: key,
-        type: photoModal.type,
+        type: "cabinet",
         cabinet: photoModal.cabinet,
-        shelf: photoModal.shelf || "",
+        shelf: "",
         image_url: "",
         updatedAt: serverTimestamp(),
       });
@@ -659,7 +648,7 @@ function ArchiveContent() {
                     {appUser?.role !== "viewer" && (
                       <div className="flex justify-end pt-1">
                         <button
-                          onClick={() => handleOpenPhotoModal("cabinet", cab.cabinetId)}
+                          onClick={() => handleOpenPhotoModal(cab.cabinetId)}
                           className="text-[11px] text-gray-500 hover:text-red-700 flex items-center font-medium"
                         >
                           <Camera className="w-3.5 h-3.5 mr-1 text-red-500" />
@@ -721,7 +710,7 @@ function ArchiveContent() {
               )}
               {appUser?.role !== "viewer" && (
                 <button
-                  onClick={() => handleOpenPhotoModal("cabinet", selectedCabinet)}
+                  onClick={() => handleOpenPhotoModal(selectedCabinet)}
                   className="flex items-center text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg"
                 >
                   <Camera className="w-3.5 h-3.5 mr-1 text-red-600" />
@@ -731,87 +720,49 @@ function ArchiveContent() {
             </div>
           </div>
 
-          {/* Shelves Grid */}
+          {/* Shelves Grid (ชั้นที่จัดวาง - ไม่มีรูปภาพ) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {currentCabinetData && Array.from(currentCabinetData.shelvesMap.values()).map(shelf => {
-              const shelfPhoto = structurePhotos[`shelf_${currentCabinetData.cabinetId}_${shelf.shelfId}`] || shelf.imageUrl;
               const cats = Array.from(shelf.categories).join(", ");
 
               return (
                 <div
                   key={shelf.shelfId}
-                  className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-lg hover:border-red-300 transition-all overflow-hidden flex flex-col justify-between group"
+                  className="bg-white rounded-2xl border border-gray-200 shadow-xs hover:shadow-md hover:border-red-300 transition-all p-5 flex flex-col justify-between group"
                 >
-                  <div>
-                    {/* Shelf Photo or Banner */}
-                    <div className="relative h-40 bg-gradient-to-br from-red-50/50 to-rose-50/50 border-b border-gray-100 overflow-hidden">
-                      {shelfPhoto ? (
-                        <>
-                          <img 
-                            src={shelfPhoto} 
-                            alt={`ชั้น ${shelf.shelfId}`}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 cursor-pointer"
-                            onClick={() => setPreviewImage({
-                              url: shelfPhoto,
-                              title: `ตู้ ${selectedCabinet} / ชั้น ${shelf.shelfId}`,
-                              subtitle: `มี ${shelf.folders.length} แฟ้มเอกสาร (${cats})`
-                            })}
-                          />
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPreviewImage({
-                                url: shelfPhoto,
-                                title: `ตู้ ${selectedCabinet} / ชั้น ${shelf.shelfId}`,
-                                subtitle: `มี ${shelf.folders.length} แฟ้มเอกสาร (${cats})`
-                              });
-                            }}
-                            className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white p-1.5 rounded-lg backdrop-blur-sm transition-colors text-xs flex items-center shadow-xs"
-                            title="กดดูรูปชั้นขนาดเต็ม"
-                          >
-                            <Maximize2 className="w-3.5 h-3.5 mr-1" />
-                            ดูรูปชั้น
-                          </button>
-                        </>
-                      ) : (
-                        <div 
-                          className="w-full h-full flex flex-col items-center justify-center text-gray-400 cursor-pointer p-4 hover:bg-red-50/40 transition-colors"
-                          onClick={() => setHierarchy(selectedCabinet, shelf.shelfId)}
-                        >
-                          <Layers className="w-12 h-12 text-red-300 mb-1" />
-                          <span className="text-xs font-medium text-gray-500">คลิกเพื่อเปิดดูแฟ้มในชั้นนี้</span>
+                  <div className="space-y-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-12 h-12 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center text-red-600 group-hover:bg-red-600 group-hover:text-white transition-colors shrink-0">
+                          <Layers className="w-6 h-6" />
                         </div>
-                      )}
-
-                      <div className="absolute bottom-2 left-2 bg-slate-900/85 backdrop-blur-sm text-white px-2.5 py-0.5 rounded-md text-xs font-bold">
-                        🪜 {shelf.displayName}
+                        <div>
+                          <h3 
+                            onClick={() => setHierarchy(selectedCabinet, shelf.shelfId)}
+                            className="text-lg font-bold text-gray-900 group-hover:text-red-600 cursor-pointer transition-colors"
+                          >
+                            {shelf.displayName}
+                          </h3>
+                          <p className="text-xs text-gray-500">
+                            ตู้ {selectedCabinet}
+                          </p>
+                        </div>
                       </div>
+                      <span className="text-xs font-bold px-2.5 py-1 bg-red-50 text-red-700 rounded-lg border border-red-200">
+                        {shelf.folders.length} แฟ้ม
+                      </span>
                     </div>
 
-                    {/* Shelf Content */}
-                    <div className="p-5 space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <h3 
-                          onClick={() => setHierarchy(selectedCabinet, shelf.shelfId)}
-                          className="text-base font-bold text-gray-900 group-hover:text-red-600 cursor-pointer transition-colors"
-                        >
-                          {shelf.displayName}
-                        </h3>
-                        <span className="text-xs font-semibold px-2.5 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-200">
-                          {shelf.folders.length} แฟ้ม
-                        </span>
+                    {cats && (
+                      <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-xs">
+                        <span className="text-gray-400 font-medium">หมวดหมู่ในชั้น:</span>
+                        <p className="text-gray-800 font-semibold mt-0.5 line-clamp-2">{cats}</p>
                       </div>
-
-                      {cats && (
-                        <p className="text-xs text-gray-600 line-clamp-1">
-                          <span className="text-gray-400 font-medium">หมวดหมู่:</span> {cats}
-                        </p>
-                      )}
-                    </div>
+                    )}
                   </div>
 
                   {/* Shelf Actions Footer */}
-                  <div className="p-4 pt-0 space-y-2">
+                  <div className="pt-4 mt-2 border-t border-gray-100">
                     <button
                       onClick={() => setHierarchy(selectedCabinet, shelf.shelfId)}
                       className="w-full flex items-center justify-center bg-red-50 hover:bg-red-600 text-red-700 hover:text-white font-semibold py-2.5 px-4 rounded-xl transition-all text-xs border border-red-200 hover:border-red-600 shadow-2xs group-hover:bg-red-600 group-hover:text-white"
@@ -819,18 +770,6 @@ function ArchiveContent() {
                       <span>เปิดดูแฟ้มในชั้นนี้ ({shelf.folders.length} แฟ้ม)</span>
                       <ChevronRight className="w-4 h-4 ml-1" />
                     </button>
-
-                    {appUser?.role !== "viewer" && (
-                      <div className="flex justify-end pt-1">
-                        <button
-                          onClick={() => handleOpenPhotoModal("shelf", selectedCabinet, shelf.shelfId)}
-                          className="text-[11px] text-gray-500 hover:text-red-700 flex items-center font-medium"
-                        >
-                          <Camera className="w-3.5 h-3.5 mr-1 text-red-500" />
-                          {shelfPhoto ? "เปลี่ยนรูปถ่ายชั้น" : "+ ถ่ายรูป/เพิ่มรูปชั้น"}
-                        </button>
-                      </div>
-                    )}
                   </div>
                 </div>
               );
@@ -865,30 +804,6 @@ function ArchiveContent() {
                   ขั้นตอนที่ 3: แฟ้มเอกสารทั้งหมดที่จัดวางอยู่บนชั้นนี้ คลิกเพื่อเปิดดูรายละเอียดและเอกสารภายในแฟ้ม
                 </p>
               </div>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              {structurePhotos[`shelf_${normalizeCabinet(selectedCabinet)}_${normalizeShelf(selectedShelf)}`] && (
-                <button
-                  onClick={() => setPreviewImage({
-                    url: structurePhotos[`shelf_${normalizeCabinet(selectedCabinet)}_${normalizeShelf(selectedShelf)}`],
-                    title: `รูปถ่าย ตู้ ${selectedCabinet} / ชั้น ${selectedShelf}`,
-                  })}
-                  className="flex items-center text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg border border-red-200"
-                >
-                  <Maximize2 className="w-3.5 h-3.5 mr-1" />
-                  ดูรูปชั้นจริง
-                </button>
-              )}
-              {appUser?.role !== "viewer" && (
-                <button
-                  onClick={() => handleOpenPhotoModal("shelf", selectedCabinet, selectedShelf)}
-                  className="flex items-center text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg"
-                >
-                  <Camera className="w-3.5 h-3.5 mr-1 text-red-600" />
-                  ถ่ายรูป/เปลี่ยนรูปชั้น
-                </button>
-              )}
             </div>
           </div>
 
@@ -985,7 +900,7 @@ function ArchiveContent() {
       )}
 
       {/* ========================================================
-          MODAL 2: ถ่ายรูป / อัปโหลดรูปภาพ ตู้ หรือ ชั้น
+          MODAL 2: ถ่ายรูป / อัปโหลดรูปภาพตู้เอกสาร
           ======================================================== */}
       {photoModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 flex items-center justify-center p-4">
