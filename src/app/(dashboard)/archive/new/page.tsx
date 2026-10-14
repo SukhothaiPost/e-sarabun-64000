@@ -34,7 +34,7 @@ export default function NewArchiveLocationPage() {
     const p4Raw = formData.folder.trim();
     const p4 = !isNaN(Number(p4Raw)) && p4Raw ? p4Raw.padStart(3, '0') : (p4Raw || "000");
     const p5Raw = formData.sequence.trim();
-    const p5 = !isNaN(Number(p5Raw)) && p5Raw ? p5Raw.padStart(3, '0') : (p5Raw || "000");
+    const p5 = p5Raw || "ชื่อแฟ้ม";
     return `${p1}-${p2}-${p3}-${p4}-${p5}`;
   };
 
@@ -52,6 +52,7 @@ export default function NewArchiveLocationPage() {
       await setDoc(newRef, {
         id: newRef.id,
         ...formData,
+        folder_name: formData.sequence,
         location_code: locationCode,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -112,12 +113,13 @@ export default function NewArchiveLocationPage() {
             <p className="text-xs text-gray-500 mt-1">* จะแสดง Fulltext เต็มตามชื่อหมวดหมู่ที่ระบุในรหัสสถานที่</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">แฟ้ม (Folder) <span className="text-red-500">*</span></label>
-            <input type="text" name="folder" required value={formData.folder} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เช่น 001, 01" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">เลขที่แฟ้ม (Folder No.) <span className="text-red-500">*</span></label>
+            <input type="text" name="folder" required value={formData.folder} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เช่น 001" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ลำดับ (Sequence) <span className="text-red-500">*</span></label>
-            <input type="text" name="sequence" required value={formData.sequence} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เช่น 001" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อแฟ้ม (Folder Name) <span className="text-red-500">*</span></label>
+            <input type="text" name="sequence" required value={formData.sequence} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เช่น แฟ้มหนังสือส่ง, แฟ้มคำสั่งแต่งตั้ง" />
+            <p className="text-xs text-gray-500 mt-1">* เปลี่ยนจากลำดับ (Sequence) มาเป็นชื่อแฟ้มระบุเนื้อหา</p>
           </div>
         </div>
 

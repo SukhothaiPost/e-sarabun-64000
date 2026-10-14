@@ -85,6 +85,7 @@ export interface ArchiveLocation {
   category: string;
   folder: string;
   sequence: string;
+  folder_name?: string;
   location_code: string;
   createdAt: any;
   updatedAt: any;

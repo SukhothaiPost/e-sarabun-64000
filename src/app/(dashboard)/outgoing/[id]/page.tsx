@@ -80,7 +80,7 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
     shelf: "01",
     category: "งานสารบรรณ",
     folder: "001",
-    sequence: "001",
+    sequence: "แฟ้มหนังสือส่ง",
   });
 
   const toInputDate = (date: any) => {
@@ -360,7 +360,7 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
         const p4Raw = newArchiveData.folder.trim();
         const p4 = !isNaN(Number(p4Raw)) && p4Raw ? p4Raw.padStart(3, '0') : (p4Raw || "000");
         const p5Raw = newArchiveData.sequence.trim();
-        const p5 = !isNaN(Number(p5Raw)) && p5Raw ? p5Raw.padStart(3, '0') : (p5Raw || "000");
+        const p5 = p5Raw || "ชื่อแฟ้ม";
         const locationCode = `${p1}-${p2}-${p3}-${p4}-${p5}`;
 
         const newLocRef = doc(collection(db, "archive_locations"));
@@ -371,6 +371,7 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
           category: newArchiveData.category,
           folder: newArchiveData.folder,
           sequence: newArchiveData.sequence,
+          folder_name: newArchiveData.sequence,
           location_code: locationCode,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -1114,9 +1115,9 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
                     <p className="text-[11px] text-gray-500 mt-0.5">* แสดง Fulltext เต็มตามชื่อหมวดหมู่ในรหัสสถานที่</p>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="col-span-2">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">แฟ้ม (Folder) <span className="text-red-500">*</span></label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">เลขที่แฟ้ม (Folder No.) <span className="text-red-500">*</span></label>
                       <input 
                         type="text" 
                         required
@@ -1127,13 +1128,14 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">ลำดับ (Sequence)</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">ชื่อแฟ้ม (Folder Name) <span className="text-red-500">*</span></label>
                       <input 
                         type="text" 
+                        required
                         value={newArchiveData.sequence}
                         onChange={(e) => setNewArchiveData({ ...newArchiveData, sequence: e.target.value })}
                         className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
-                        placeholder="001"
+                        placeholder="เช่น แฟ้มหนังสือส่ง 2567"
                       />
                     </div>
                   </div>
@@ -1149,7 +1151,7 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
                         const p4Raw = newArchiveData.folder.trim();
                         const p4 = !isNaN(Number(p4Raw)) && p4Raw ? p4Raw.padStart(3, '0') : (p4Raw || "000");
                         const p5Raw = newArchiveData.sequence.trim();
-                        const p5 = !isNaN(Number(p5Raw)) && p5Raw ? p5Raw.padStart(3, '0') : (p5Raw || "000");
+                        const p5 = p5Raw || "ชื่อแฟ้ม";
                         return `${p1}-${p2}-${p3}-${p4}-${p5}`;
                       })()}
                     </span>

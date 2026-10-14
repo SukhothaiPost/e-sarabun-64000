@@ -101,7 +101,7 @@ export default function ArchivePage() {
                 <div className="text-sm text-gray-600 space-y-1">
                   <p><span className="font-medium text-gray-700">ตู้:</span> {loc.cabinet} <span className="font-medium text-gray-700 ml-2">ชั้น:</span> {loc.shelf}</p>
                   <p><span className="font-medium text-gray-700">หมวดหมู่:</span> {loc.category}</p>
-                  <p><span className="font-medium text-gray-700">แฟ้ม:</span> {loc.folder} <span className="font-medium text-gray-700 ml-2">ลำดับ:</span> {loc.sequence}</p>
+                  <p><span className="font-medium text-gray-700">เลขที่แฟ้ม:</span> {loc.folder} <span className="font-medium text-gray-700 ml-2">ชื่อแฟ้ม:</span> {loc.folder_name || loc.sequence}</p>
                 </div>
               </div>
             ))}
