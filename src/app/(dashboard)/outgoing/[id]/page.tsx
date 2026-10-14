@@ -8,7 +8,9 @@ import {
   serverTimestamp, 
   collection, 
   getDocs, 
-  setDoc 
+  setDoc,
+  query,
+  where
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/lib/contexts/AuthContext";
@@ -30,7 +32,10 @@ import {
   AlertTriangle,
   FolderPlus,
   CheckCircle,
-  Send
+  Send,
+  Inbox,
+  ArrowRight,
+  FileText
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -41,6 +46,7 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
   const { appUser } = useAuth();
   
   const [document, setDocument] = useState<SarabanDocument | null>(null);
+  const [relatedDocs, setRelatedDocs] = useState<SarabanDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [archiveLocations, setArchiveLocations] = useState<ArchiveLocation[]>([]);
 
@@ -120,6 +126,50 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
           status: loadedDoc.status || "registered",
           notes: loadedDoc.notes || "",
         });
+
+        // Fetch related documents (หนังสือรับต้นเรื่อง หรือหนังสือที่อ้างอิงถึงกัน)
+        const relMap = new Map<string, SarabanDocument>();
+        const targetIds = new Set<string>(loadedDoc.related_documents || []);
+        if ((loadedDoc as any).related_document_id) {
+          targetIds.add((loadedDoc as any).related_document_id);
+        }
+
+        for (const relId of targetIds) {
+          try {
+            const s = await getDoc(doc(db, "documents", relId));
+            if (s.exists() && !s.data().deleted) {
+              const rData = s.data() as any;
+              relMap.set(s.id, {
+                id: s.id,
+                ...rData,
+                document_date: rData.document_date?.toDate ? rData.document_date.toDate() : new Date(rData.document_date),
+                sent_date: rData.sent_date?.toDate ? rData.sent_date.toDate() : new Date(rData.sent_date),
+                received_date: rData.received_date?.toDate ? rData.received_date.toDate() : new Date(rData.received_date),
+              } as SarabanDocument);
+            }
+          } catch (e) {}
+        }
+
+        try {
+          const qRel = query(
+            collection(db, "documents"), 
+            where("related_documents", "array-contains", loadedDoc.id), 
+            where("deleted", "==", false)
+          );
+          const snapRel = await getDocs(qRel);
+          snapRel.forEach(s => {
+            const rData = s.data() as any;
+            relMap.set(s.id, {
+              id: s.id,
+              ...rData,
+              document_date: rData.document_date?.toDate ? rData.document_date.toDate() : new Date(rData.document_date),
+              sent_date: rData.sent_date?.toDate ? rData.sent_date.toDate() : new Date(rData.sent_date),
+              received_date: rData.received_date?.toDate ? rData.received_date.toDate() : new Date(rData.received_date),
+            } as SarabanDocument);
+          });
+        } catch (e) {}
+
+        setRelatedDocs(Array.from(relMap.values()));
       }
     } catch (err) {
       console.error("Error fetching doc:", err);
@@ -387,16 +437,28 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
       }
 
       const docRef = doc(db, "documents", document.id);
-      await updateDoc(docRef, {
+      const archiveUpdate = {
         archive_location_id: targetLocation.id,
         archive_location_code: targetLocation.location_code,
         archive_cabinet: targetLocation.cabinet,
         archive_shelf: targetLocation.shelf,
         archive_folder: targetLocation.folder,
+        archive_folder_name: targetLocation.folder_name || targetLocation.sequence,
         status: "archived",
         updatedAt: serverTimestamp(),
         updated_by: appUser?.id || "",
-      });
+      };
+      await updateDoc(docRef, archiveUpdate);
+
+      // ALSO sync all related documents (e.g. incoming doc referenced by this outgoing letter) into the exact same folder!
+      for (const rel of relatedDocs) {
+        try {
+          const relRef = doc(db, "documents", rel.id);
+          await updateDoc(relRef, archiveUpdate);
+        } catch (syncErr) {
+          console.warn("Could not sync related doc archive:", syncErr);
+        }
+      }
 
       const logRef = doc(collection(db, "activity_logs"));
       await setDoc(logRef, {
@@ -557,6 +619,70 @@ export default function OutgoingDocumentDetailPage({ params }: { params: Promise
               <div className="mt-6 pt-4 border-t">
                 <p className="text-xs font-semibold text-gray-500 uppercase">หมายเหตุ</p>
                 <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg border border-gray-100">{document.notes}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Related Documents Card */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b">
+              <h2 className="text-lg font-bold text-gray-900 flex items-center">
+                <Inbox className="w-5 h-5 mr-2 text-blue-600" />
+                หนังสือรับต้นเรื่อง / เอกสารที่เชื่อมโยง ({relatedDocs.length})
+              </h2>
+            </div>
+
+            {relatedDocs.length === 0 ? (
+              <div className="text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                <p className="text-sm text-gray-500">ไม่มีหนังสือรับต้นเรื่องหรือเอกสารที่เชื่อมโยงกับหนังสือส่งนี้</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-gray-500">
+                  * เอกสารที่เชื่อมโยงกันจะถูกจัดเก็บเข้าแฟ้มเดียวกันโดยอัตโนมัติเมื่อมีการบันทึกการจัดเก็บ
+                </p>
+                {relatedDocs.map((rel) => {
+                  const isIncoming = rel.document_type === "incoming";
+                  const href = isIncoming ? `/incoming/${rel.id}` : `/outgoing/${rel.id}`;
+                  return (
+                    <div
+                      key={rel.id}
+                      className="p-4 rounded-xl border border-gray-200 bg-gray-50/70 hover:bg-blue-50/40 hover:border-blue-200 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs px-2 py-0.5 rounded font-medium ${isIncoming ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>
+                            {isIncoming ? "หนังสือรับต้นเรื่อง" : "หนังสือส่ง"}
+                          </span>
+                          <span className="text-sm font-bold text-gray-900">
+                            เลขทะเบียน: {rel.running_number || "-"}
+                          </span>
+                          {rel.document_number && (
+                            <span className="text-xs text-gray-500">
+                              (เลขที่ {rel.document_number})
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm font-medium text-gray-800 line-clamp-1">{rel.subject}</p>
+                        <div className="flex items-center gap-3 text-xs text-gray-500">
+                          <span>{isIncoming ? `จาก: ${rel.sender}` : `ถึง: ${rel.recipient}`}</span>
+                          {rel.archive_location_code && (
+                            <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-mono text-[11px] border border-emerald-200">
+                              แฟ้ม: {rel.archive_folder_name || rel.archive_folder} ({rel.archive_location_code})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <Link
+                        href={href}
+                        className="inline-flex items-center justify-center text-xs font-semibold text-blue-600 hover:text-blue-800 bg-white border border-gray-200 hover:border-blue-300 px-3 py-1.5 rounded-lg shadow-sm whitespace-nowrap"
+                      >
+                        ดูเอกสาร
+                        <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                      </Link>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

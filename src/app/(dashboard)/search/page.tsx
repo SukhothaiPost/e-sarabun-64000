@@ -1,176 +1,167 @@
 "use client";
 
-import { useState } from "react";
-import { collection, query, getDocs, orderBy } from "firebase/firestore";
+import { useState, useEffect } from "react";
+import { collection, query, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { SarabanDocument } from "@/types";
 import { formatToBuddhistEra } from "@/lib/dateUtils";
-import { Search, Filter, FileText, Inbox, Send } from "lucide-react";
+import { Search, FileText, Inbox, Send, ArrowRight, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function SearchPage() {
-  const [documents, setDocuments] = useState<SarabanDocument[]>([]);
+  const [allDocuments, setAllDocuments] = useState<SarabanDocument[]>([]);
+  const [filteredDocuments, setFilteredDocuments] = useState<SarabanDocument[]>([]);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [keyword, setKeyword] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
   const router = useRouter();
 
-  // Search Filters State
-  const [filters, setFilters] = useState({
-    keyword: "",
-    document_type: "",
-    status: "",
-    year: new Date().getFullYear() + 543 + "",
-  });
+  // Load active documents once for fast and responsive search
+  useEffect(() => {
+    const fetchAllDocs = async () => {
+      try {
+        const q = query(collection(db, "documents"));
+        const snapshot = await getDocs(q);
+        const docs = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            ...data,
+            document_date: data.document_date?.toDate ? data.document_date.toDate() : new Date(data.document_date),
+            received_date: data.received_date?.toDate ? data.received_date.toDate() : new Date(data.received_date),
+            sent_date: data.sent_date?.toDate ? data.sent_date.toDate() : new Date(data.sent_date),
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt),
+          } as SarabanDocument;
+        }).filter(doc => doc.deleted === false);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    try {
-      // In a real production app with Algolia or Typesense, this would be a full-text search.
-      // With Firestore, we have to fetch and filter in memory for complex queries or use limited queries.
-      // For this MVP, we fetch recent documents and filter.
-      const q = query(collection(db, "documents")/*, orderBy("createdAt", "desc")*/);
-      const snapshot = await getDocs(q);
-      
-      let docs = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          ...data,
-          document_date: data.document_date?.toDate(),
-          received_date: data.received_date?.toDate(),
-          sent_date: data.sent_date?.toDate(),
-          createdAt: data.createdAt?.toDate(),
-          updatedAt: data.updatedAt?.toDate(),
-        } as SarabanDocument;
-      }).filter(doc => doc.deleted === false);
-
-      // Apply filters in memory
-      if (filters.document_type) {
-        docs = docs.filter(d => d.document_type === filters.document_type);
-      }
-      
-      if (filters.status) {
-        docs = docs.filter(d => d.status === filters.status);
-      }
-      
-      if (filters.year) {
-        const beYear = parseInt(filters.year);
-        docs = docs.filter(d => {
-          const docDate = d.document_date || d.sent_date || d.received_date || d.createdAt;
-          const docYear = docDate ? (docDate.getFullYear() + 543) : null;
-          return docYear === beYear || (d.running_number && d.running_number.endsWith(`/${filters.year}`));
+        docs.sort((a, b) => {
+          const dateA = a.createdAt?.getTime() || 0;
+          const dateB = b.createdAt?.getTime() || 0;
+          return dateB - dateA;
         });
-      }
 
-      if (filters.keyword) {
-        const lowerKeyword = filters.keyword.toLowerCase();
-        docs = docs.filter(d => 
-          d.subject.toLowerCase().includes(lowerKeyword) ||
-          d.running_number.toLowerCase().includes(lowerKeyword) ||
-          d.document_number.toLowerCase().includes(lowerKeyword) ||
-          d.sender.toLowerCase().includes(lowerKeyword) ||
-          d.recipient.toLowerCase().includes(lowerKeyword)
-        );
+        setAllDocuments(docs);
+      } catch (err) {
+        console.error("Error loading documents for search:", err);
+      } finally {
+        setInitialLoading(false);
       }
+    };
 
-      setDocuments(docs);
-    } catch (err) {
-      console.error("Search failed:", err);
-    } finally {
-      setLoading(false);
+    fetchAllDocs();
+  }, []);
+
+  const executeSearch = (searchTerm: string) => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) {
+      setFilteredDocuments([]);
+      setHasSearched(false);
+      return;
     }
+
+    setLoading(true);
+    setHasSearched(true);
+
+    const results = allDocuments.filter(d => 
+      (d.subject && d.subject.toLowerCase().includes(term)) ||
+      (d.running_number && d.running_number.toLowerCase().includes(term)) ||
+      (d.document_number && d.document_number.toLowerCase().includes(term)) ||
+      (d.sender && d.sender.toLowerCase().includes(term)) ||
+      (d.recipient && d.recipient.toLowerCase().includes(term)) ||
+      (d.notes && d.notes.toLowerCase().includes(term)) ||
+      (d.tracking_number && d.tracking_number.toLowerCase().includes(term)) ||
+      (d.archive_location_code && d.archive_location_code.toLowerCase().includes(term)) ||
+      (d.archive_folder && d.archive_folder.toLowerCase().includes(term))
+    );
+
+    setFilteredDocuments(results);
+    setLoading(false);
   };
 
-  const getDocTypeIcon = (type: string) => {
-    if (type === 'incoming') return <Inbox className="w-5 h-5 text-blue-500" />;
-    if (type === 'outgoing') return <Send className="w-5 h-5 text-green-500" />;
-    return <FileText className="w-5 h-5 text-gray-500" />;
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    executeSearch(keyword);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setKeyword(val);
+    executeSearch(val);
+  };
+
+  const handleClear = () => {
+    setKeyword("");
+    setFilteredDocuments([]);
+    setHasSearched(false);
+  };
+
+  const getDocTypeBadge = (type: string) => {
+    if (type === 'incoming') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+          <Inbox className="w-3.5 h-3.5 mr-1" />
+          หนังสือรับ
+        </span>
+      );
+    }
+    if (type === 'outgoing') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+          <Send className="w-3.5 h-3.5 mr-1" />
+          หนังสือส่ง
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800 border border-gray-200">
+        <FileText className="w-3.5 h-3.5 mr-1" />
+        เอกสาร
+      </span>
+    );
   };
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">ค้นหาเอกสาร</h1>
-        <p className="text-sm text-gray-500">สืบค้นเอกสารทั้งหมดในระบบ</p>
+        <p className="text-sm text-gray-500">สืบค้นเอกสารหนังสือรับและหนังสือส่งในระบบทั้งหมด</p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <form onSubmit={handleSearch} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="md:col-span-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">คำค้นหา</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  value={filters.keyword}
-                  onChange={e => setFilters({...filters, keyword: e.target.value})}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="เรื่อง, เลขที่หนังสือ, ผู้ส่ง, ผู้รับ..."
-                />
-              </div>
+      {/* Main Single Search Bar */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <Search className="h-6 w-6 text-gray-400" />
             </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">ประเภทเอกสาร</label>
-              <select 
-                value={filters.document_type}
-                onChange={e => setFilters({...filters, document_type: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">ทั้งหมด</option>
-                <option value="incoming">หนังสือรับ</option>
-                <option value="outgoing">หนังสือส่ง</option>
-                <option value="internal">หนังสือภายใน</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">สถานะ</label>
-              <select 
-                value={filters.status}
-                onChange={e => setFilters({...filters, status: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">ทั้งหมด</option>
-                <option value="registered">ลงทะเบียนแล้ว/สร้างเรื่องแล้ว</option>
-                <option value="assigned">มอบหมายแล้ว</option>
-                <option value="in_progress">กำลังดำเนินการ</option>
-                <option value="completed">ดำเนินการแล้ว/ส่งแล้ว</option>
-                <option value="archived">จัดเก็บแล้ว</option>
-                <option value="closed">ปิดเรื่อง</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">ปี พ.ศ.</label>
-              <select 
-                value={filters.year}
-                onChange={e => setFilters({...filters, year: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">ทั้งหมด</option>
-                <option value="2569">2569</option>
-                <option value="2568">2568</option>
-                <option value="2567">2567</option>
-              </select>
-            </div>
-            
-            <div className="flex items-end">
+            <input
+              type="text"
+              autoFocus
+              value={keyword}
+              onChange={handleInputChange}
+              className="block w-full pl-12 pr-28 py-3.5 border-2 border-gray-200 rounded-xl text-base focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all placeholder-gray-400"
+              placeholder="พิมพ์คำค้นหา: เรื่อง, เลขที่ลงรับ, เลขทะเบียนส่ง, เลขที่หนังสือภายนอก, ผู้ส่ง, ผู้รับ..."
+            />
+            <div className="absolute inset-y-0 right-2 flex items-center space-x-1">
+              {keyword && (
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
               <button 
                 type="submit"
                 disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors disabled:opacity-70 flex justify-center items-center"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-5 rounded-lg text-sm transition-colors shadow-sm disabled:opacity-70 flex items-center"
               >
                 {loading ? (
-                  <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 ) : (
-                  <>
-                    <Search className="w-4 h-4 mr-2" />
-                    ค้นหา
-                  </>
+                  "ค้นหา"
                 )}
               </button>
             </div>
@@ -178,35 +169,88 @@ export default function SearchPage() {
         </form>
       </div>
 
-      {documents.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="p-4 border-b border-gray-200 bg-gray-50">
-            <h3 className="font-medium text-gray-700">ผลการค้นหา ({documents.length} รายการ)</h3>
+      {/* Search Results */}
+      {initialLoading ? (
+        <div className="p-12 text-center text-gray-500 bg-white rounded-xl border border-gray-200">
+          <div className="h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          กำลังเตรียมฐานข้อมูลค้นหา...
+        </div>
+      ) : hasSearched ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-2">
+            <h2 className="text-base font-bold text-gray-800">
+              ผลการค้นหาสำหรับ &ldquo;<span className="text-blue-600">{keyword}</span>&rdquo;
+            </h2>
+            <span className="text-sm text-gray-500">พบ {filteredDocuments.length} รายการ</span>
           </div>
-          <div className="divide-y divide-gray-200">
-            {documents.map(doc => (
-              <div 
-                key={doc.id} 
-                onClick={() => router.push(`/${doc.document_type}/${doc.id}`)}
-                className="p-4 hover:bg-blue-50 cursor-pointer transition-colors flex items-start gap-4"
-              >
-                <div className="mt-1 flex-shrink-0">
-                  {getDocTypeIcon(doc.document_type)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-semibold text-blue-700 truncate">{doc.running_number}</p>
-                    <span className="text-xs text-gray-500">{formatToBuddhistEra(doc.createdAt)}</span>
+
+          {filteredDocuments.length === 0 ? (
+            <div className="p-12 text-center text-gray-500 bg-white rounded-xl border border-gray-200">
+              <Search className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-base font-medium text-gray-700">ไม่พบเอกสารที่ตรงกับคำค้นหา</p>
+              <p className="text-xs text-gray-400 mt-1">ลองค้นหาด้วยคำอื่น เช่น เรื่อง, เลขที่หนังสือ, หรือชื่อหน่วยงาน</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden divide-y divide-gray-100">
+              {filteredDocuments.map(doc => (
+                <div 
+                  key={doc.id} 
+                  onClick={() => router.push(`/${doc.document_type}/${doc.id}`)}
+                  className="p-5 hover:bg-blue-50/50 cursor-pointer transition-colors group"
+                >
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center space-x-3">
+                      {getDocTypeBadge(doc.document_type)}
+                      <span className="font-mono font-bold text-blue-700 text-base">
+                        {doc.running_number}
+                      </span>
+                      {doc.document_number && doc.document_number !== doc.running_number && (
+                        <span className="text-xs text-gray-500 font-mono">
+                          (เลขที่: {doc.document_number})
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs text-gray-500">
+                      {formatToBuddhistEra(doc.document_date || doc.sent_date || doc.received_date)}
+                    </span>
                   </div>
-                  <p className="text-base font-medium text-gray-900 mb-1">{doc.subject}</p>
-                  <div className="flex items-center text-sm text-gray-500 gap-4">
-                    <span>{doc.document_type === 'incoming' ? `จาก: ${doc.sender}` : `เรียน: ${doc.recipient}`}</span>
-                    <span>สถานะ: {doc.status}</span>
+
+                  <p className="text-base font-semibold text-gray-900 group-hover:text-blue-700 transition-colors mb-2">
+                    {doc.subject}
+                  </p>
+
+                  <div className="flex flex-wrap items-center text-xs text-gray-600 gap-y-1 gap-x-4">
+                    <span>
+                      <strong className="text-gray-500 font-medium">
+                        {doc.document_type === 'incoming' ? 'จาก: ' : 'เรียน: '}
+                      </strong>
+                      {doc.document_type === 'incoming' ? doc.sender : doc.recipient}
+                    </span>
+                    {doc.tracking_number && (
+                      <span className="font-mono text-purple-700 font-semibold bg-purple-50 px-2 py-0.5 rounded">
+                        Tracking: {doc.tracking_number}
+                      </span>
+                    )}
+                    {doc.archive_folder && (
+                      <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded">
+                        แฟ้ม: {doc.archive_folder}
+                      </span>
+                    )}
+                    <span className="ml-auto inline-flex items-center text-blue-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                      ดูรายละเอียด
+                      <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                    </span>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="p-12 text-center text-gray-400 bg-white rounded-xl border border-gray-200">
+          <Search className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+          <p className="text-sm font-medium text-gray-600">พิมพ์คำค้นหาเพื่อเริ่มต้นค้นหาเอกสาร</p>
+          <p className="text-xs text-gray-400 mt-1">สามารถค้นหาได้ทั้งเลขทะเบียนรับ, เลขทะเบียนส่ง, เรื่อง, หน่วยงาน, เลข Tracking, หรือชื่อแฟ้ม</p>
         </div>
       )}
     </div>

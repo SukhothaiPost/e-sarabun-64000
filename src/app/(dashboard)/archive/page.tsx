@@ -91,19 +91,27 @@ export default function ArchivePage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
             {filteredLocations.map(loc => (
-              <div key={loc.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between mb-2">
+              <Link 
+                key={loc.id} 
+                href={`/archive/${loc.id}`}
+                className="border border-gray-200 rounded-xl p-5 hover:shadow-lg hover:border-purple-300 hover:bg-purple-50/20 transition-all cursor-pointer block group bg-white"
+              >
+                <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center">
-                    <Folder className="h-5 w-5 text-blue-500 mr-2" />
-                    <span className="font-semibold text-gray-900">{loc.location_code}</span>
+                    <Folder className="h-5 w-5 text-purple-600 mr-2 shrink-0" />
+                    <span className="font-mono font-bold text-gray-900 group-hover:text-purple-700 transition-colors">{loc.location_code}</span>
                   </div>
                 </div>
-                <div className="text-sm text-gray-600 space-y-1">
-                  <p><span className="font-medium text-gray-700">ตู้:</span> {loc.cabinet} <span className="font-medium text-gray-700 ml-2">ชั้น:</span> {loc.shelf}</p>
-                  <p><span className="font-medium text-gray-700">หมวดหมู่:</span> {loc.category}</p>
-                  <p><span className="font-medium text-gray-700">เลขที่แฟ้ม:</span> {loc.folder} <span className="font-medium text-gray-700 ml-2">ชื่อแฟ้ม:</span> {loc.folder_name || loc.sequence}</p>
+                <div className="text-sm text-gray-600 space-y-1.5">
+                  <p><span className="font-medium text-gray-500">ตู้:</span> {loc.cabinet} <span className="font-medium text-gray-500 ml-2">ชั้น:</span> {loc.shelf}</p>
+                  <p><span className="font-medium text-gray-500">หมวดหมู่:</span> {loc.category}</p>
+                  <p><span className="font-medium text-gray-500">เลขที่แฟ้ม:</span> {loc.folder} <span className="font-medium text-gray-500 ml-2">ชื่อแฟ้ม:</span> <span className="font-semibold text-gray-900">{loc.folder_name || loc.sequence}</span></p>
                 </div>
-              </div>
+                <div className="flex items-center text-xs font-semibold text-purple-600 group-hover:text-purple-700 mt-3 pt-3 border-t border-gray-100 justify-between">
+                  <span>ดูรายละเอียดและเอกสารในแฟ้ม</span>
+                  <span className="text-base font-bold transition-transform group-hover:translate-x-1">→</span>
+                </div>
+              </Link>
             ))}
           </div>
         )}

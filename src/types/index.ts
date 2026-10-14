@@ -48,6 +48,7 @@ export interface SarabanDocument {
   archive_cabinet?: string;
   archive_shelf?: string;
   archive_folder?: string;
+  archive_folder_name?: string;
   related_documents: string[];
   created_by: string;
   updated_by: string;
