@@ -92,11 +92,8 @@ export default function IncomingDocumentDetailPage({ params }: { params: Promise
                 <p className="text-base text-gray-900 mt-1">{formatToBuddhistEra(document.received_date)}</p>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-500">ความเร่งด่วน / ชั้นความลับ</p>
-                <div className="flex space-x-2 mt-1">
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${document.urgency !== 'ปกติ' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>{document.urgency}</span>
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${document.confidentiality !== 'ปกติ' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>{document.confidentiality}</span>
-                </div>
+                <p className="text-sm font-medium text-gray-500">เลขที่ลงรับ (ในระบบ)</p>
+                <p className="text-base font-bold text-blue-700 mt-1">{document.running_number}</p>
               </div>
             </div>
             
@@ -112,26 +109,13 @@ export default function IncomingDocumentDetailPage({ params }: { params: Promise
         {/* Sidebar Info */}
         <div className="space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b">สถานะและการจัดการ</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b">สถานะเอกสาร</h2>
             
             <div className="space-y-4">
               <div>
                 <p className="text-sm font-medium text-gray-500">สถานะปัจจุบัน</p>
                 <p className="text-base font-bold text-gray-900 mt-1">{document.status}</p>
               </div>
-              
-              <div>
-                <p className="text-sm font-medium text-gray-500">ผู้รับผิดชอบ</p>
-                <p className="text-base text-gray-900 mt-1">{document.responsible_user_id ? "ตรวจสอบในฐานข้อมูล" : "ยังไม่ระบุ"}</p>
-              </div>
-              
-              {appUser?.role !== 'viewer' && (
-                <div className="pt-4 border-t">
-                  <button className="w-full bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium py-2 px-4 rounded-md transition-colors text-sm">
-                    อัปเดตสถานะ
-                  </button>
-                </div>
-              )}
             </div>
           </div>
 
