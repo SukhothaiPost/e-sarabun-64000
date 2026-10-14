@@ -1,0 +1,71 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Function to get user document
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    // Role check functions
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserData().role == 'super_admin';
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && getUserData().role == 'admin';
+    }
+    
+    function isOfficer() {
+      return isAuthenticated() && getUserData().role == 'officer';
+    }
+
+    function isViewer() {
+      return isAuthenticated() && getUserData().role == 'viewer';
+    }
+
+    function hasAdminOrSuperAdmin() {
+      return isSuperAdmin() || isAdmin();
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+
+    // Documents Collection
+    match /documents/{documentId} {
+      allow read: if isAuthenticated();
+      allow create: if hasAdminOrSuperAdmin();
+      allow update: if hasAdminOrSuperAdmin() || 
+                    (isOfficer() && resource.data.responsible_user_id == request.auth.uid);
+      allow delete: if false; // Only soft delete allowed via update
+    }
+
+    // Archive Locations Collection
+    match /archive_locations/{locationId} {
+      allow read: if isAuthenticated();
+      allow write: if hasAdminOrSuperAdmin();
+    }
+
+    // System Configs Collection
+    match /system_configs/{configId} {
+      allow read: if isAuthenticated();
+      allow write: if hasAdminOrSuperAdmin();
+    }
+
+    // Activity Logs Collection
+    match /activity_logs/{logId} {
+      allow read: if hasAdminOrSuperAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Immutable logs
+    }
+  }
+}
