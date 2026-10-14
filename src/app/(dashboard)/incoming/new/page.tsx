@@ -54,16 +54,13 @@ export default function NewIncomingDocumentPage() {
         let lastNum = 0;
         if (configSnap.exists()) {
           const data = configSnap.data();
-          if (data.current_year === currentYear) {
-            lastNum = data.incoming_last_number || 0;
-          }
+          lastNum = data.incoming_last_number || 0;
         }
-        const nextNum = (lastNum + 1).toString().padStart(4, "0");
-        setRunningNumber(`${nextNum}/${currentYear}`);
+        const nextNum = (lastNum + 1).toString();
+        setRunningNumber(nextNum);
       } catch (err) {
         console.error("Failed to fetch running number preview", err);
-        const currentYear = new Date().getFullYear() + 543;
-        setRunningNumber(`0001/${currentYear}`);
+        setRunningNumber("1");
       }
     };
 
@@ -206,10 +203,10 @@ export default function NewIncomingDocumentPage() {
                 value={runningNumber} 
                 onChange={(e) => setRunningNumber(e.target.value)} 
                 className="w-full md:w-1/2 px-4 py-2 border border-blue-300 rounded-md font-mono text-lg font-bold text-blue-800 bg-white focus:ring-blue-500 focus:border-blue-500" 
-                placeholder="เช่น 0001/2569" 
+                placeholder="เช่น 1, 2, 3..." 
               />
               <p className="text-xs text-blue-700 mt-1">
-                ระบบรันเลขอัตโนมัติให้ต่อเนื่อง (สามารถปรับเปลี่ยนหรือระบุเองได้ตามต้องการ)
+                ระบบรันตัวเลขอัตโนมัติให้ต่อเนื่อง (สามารถปรับเปลี่ยนหรือระบุเองได้)
               </p>
             </div>
 

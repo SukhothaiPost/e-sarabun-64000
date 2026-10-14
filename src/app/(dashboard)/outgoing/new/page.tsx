@@ -57,12 +57,10 @@ export default function NewOutgoingDocumentPage() {
         let lastNum = 0;
         if (configSnap.exists()) {
           const data = configSnap.data();
-          if (data.current_year === currentYear) {
-            lastNum = data.outgoing_last_number || 0;
-          }
+          lastNum = data.outgoing_last_number || 0;
         }
-        const nextNum = (lastNum + 1).toString().padStart(4, "0");
-        setRunningNumber(`ส่ง.${nextNum}/${currentYear}`);
+        const nextNum = (lastNum + 1).toString();
+        setRunningNumber(nextNum);
 
         // 2. Fetch incoming docs for reply reference
         const qDocs = query(
@@ -232,10 +230,10 @@ export default function NewOutgoingDocumentPage() {
                 value={runningNumber} 
                 onChange={(e) => setRunningNumber(e.target.value)} 
                 className="w-full md:w-1/2 px-4 py-2 border border-emerald-300 rounded-md font-mono text-lg font-bold text-emerald-800 bg-white focus:ring-emerald-500 focus:border-emerald-500" 
-                placeholder="เช่น ส่ง.0001/2569" 
+                placeholder="เช่น 1, 2, 3..." 
               />
               <p className="text-xs text-emerald-700 mt-1">
-                ระบบรันเลขส่งอัตโนมัติต่อเนื่อง (สามารถปรับเปลี่ยนหรือกำหนดเลขเองได้ตามต้องการ)
+                ระบบรันตัวเลขอัตโนมัติต่อเนื่อง (สามารถปรับเปลี่ยนหรือกำหนดเลขเองได้)
               </p>
             </div>
 

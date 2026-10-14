@@ -54,7 +54,12 @@ export default function SearchPage() {
       }
       
       if (filters.year) {
-        docs = docs.filter(d => d.running_number.endsWith(`/${filters.year}`));
+        const beYear = parseInt(filters.year);
+        docs = docs.filter(d => {
+          const docDate = d.document_date || d.sent_date || d.received_date || d.createdAt;
+          const docYear = docDate ? (docDate.getFullYear() + 543) : null;
+          return docYear === beYear || (d.running_number && d.running_number.endsWith(`/${filters.year}`));
+        });
       }
 
       if (filters.keyword) {
