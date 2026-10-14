@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { db } from "@/lib/firebase/config";
 import { collection, doc, setDoc, serverTimestamp } from "firebase/firestore";
@@ -9,16 +9,21 @@ import { ArrowLeft, Camera, Image as ImageIcon, Trash2, Upload } from "lucide-re
 import Link from "next/link";
 import { compressImage } from "@/lib/imageUtils";
 
-export default function NewArchiveLocationPage() {
+function NewArchiveLocationContent() {
   const { appUser } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const prefilledCabinet = searchParams.get("cabinet") || "1";
+  const prefilledShelf = searchParams.get("shelf") || "01";
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [error, setError] = useState("");
 
   const [formData, setFormData] = useState({
-    cabinet: "1",
-    shelf: "01",
+    cabinet: prefilledCabinet,
+    shelf: prefilledShelf,
     category: "",
     folder: "",
     sequence: "",
@@ -95,7 +100,8 @@ export default function NewArchiveLocationPage() {
         timestamp: serverTimestamp(),
       });
 
-      router.push("/archive");
+      // Return directly to the shelf in archive view
+      router.push(`/archive?cabinet=${encodeURIComponent(formData.cabinet)}&shelf=${encodeURIComponent(formData.shelf)}`);
     } catch (err: any) {
       console.error(err);
       setError("เกิดข้อผิดพลาดในการสร้างจุดจัดเก็บ: " + err.message);
@@ -103,15 +109,21 @@ export default function NewArchiveLocationPage() {
     }
   };
 
+  const backUrl = prefilledCabinet && prefilledShelf 
+    ? `/archive?cabinet=${prefilledCabinet}&shelf=${prefilledShelf}`
+    : prefilledCabinet 
+    ? `/archive?cabinet=${prefilledCabinet}`
+    : "/archive";
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center space-x-4">
-        <Link href="/archive" className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
+        <Link href={backUrl} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">เพิ่มจุดจัดเก็บเอกสาร</h1>
-          <p className="text-sm text-gray-500">กำหนดตู้ ชั้น แฟ้ม สำหรับจัดเก็บเอกสารตัวจริง</p>
+          <p className="text-sm text-gray-500">กำหนด 1.ตู้ 2.ชั้น 3.แฟ้ม สำหรับจัดเก็บเอกสารตัวจริง</p>
         </div>
       </div>
 
@@ -124,25 +136,75 @@ export default function NewArchiveLocationPage() {
       <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ตู้ (Cabinet) <span className="text-red-500">*</span></label>
-            <input type="text" name="cabinet" required value={formData.cabinet} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เช่น 1 หรือ ตู้ 1" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              1. ตู้ (Cabinet) <span className="text-red-500">*</span>
+            </label>
+            <input 
+              type="text" 
+              name="cabinet" 
+              required 
+              value={formData.cabinet} 
+              onChange={handleChange} 
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500" 
+              placeholder="เช่น 1 หรือ ตู้ 1" 
+            />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ชั้น (Shelf) <span className="text-red-500">*</span></label>
-            <input type="text" name="shelf" required value={formData.shelf} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เช่น 01 หรือ 1" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              2. ชั้นในตู้ (Shelf) <span className="text-red-500">*</span>
+            </label>
+            <input 
+              type="text" 
+              name="shelf" 
+              required 
+              value={formData.shelf} 
+              onChange={handleChange} 
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500" 
+              placeholder="เช่น 01 หรือ 1" 
+            />
           </div>
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่/งาน (Category) <span className="text-red-500">*</span></label>
-            <input type="text" name="category" required value={formData.category} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เช่น งานสารบรรณ, งานบุคคล, การเงิน" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              หมวดหมู่/งาน (Category) <span className="text-red-500">*</span>
+            </label>
+            <input 
+              type="text" 
+              name="category" 
+              required 
+              value={formData.category} 
+              onChange={handleChange} 
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500" 
+              placeholder="เช่น งานสารบรรณ, งานบุคคล, การเงิน" 
+            />
             <p className="text-xs text-gray-500 mt-1">* จะแสดง Fulltext เต็มตามชื่อหมวดหมู่ที่ระบุในรหัสสถานที่</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">เลขที่แฟ้ม (Folder No.) <span className="text-red-500">*</span></label>
-            <input type="text" name="folder" required value={formData.folder} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เช่น 001" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              3. เลขที่แฟ้ม (Folder No.) <span className="text-red-500">*</span>
+            </label>
+            <input 
+              type="text" 
+              name="folder" 
+              required 
+              value={formData.folder} 
+              onChange={handleChange} 
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500" 
+              placeholder="เช่น 001" 
+            />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อแฟ้ม (Folder Name) <span className="text-red-500">*</span></label>
-            <input type="text" name="sequence" required value={formData.sequence} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="เช่น แฟ้มหนังสือส่ง, แฟ้มคำสั่งแต่งตั้ง" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              ชื่อแฟ้ม (Folder Name) <span className="text-red-500">*</span>
+            </label>
+            <input 
+              type="text" 
+              name="sequence" 
+              required 
+              value={formData.sequence} 
+              onChange={handleChange} 
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500" 
+              placeholder="เช่น แฟ้มหนังสือส่ง, แฟ้มคำสั่งแต่งตั้ง" 
+            />
             <p className="text-xs text-gray-500 mt-1">* เปลี่ยนจากลำดับ (Sequence) มาเป็นชื่อแฟ้มระบุเนื้อหา</p>
           </div>
         </div>
@@ -222,10 +284,10 @@ export default function NewArchiveLocationPage() {
         </div>
 
         <div className="flex justify-end space-x-4 pt-4">
-          <Link href="/archive" className="px-6 py-2 border border-gray-300 text-gray-700 font-medium rounded-md hover:bg-gray-50 transition-colors">
+          <Link href={backUrl} className="px-6 py-2 border border-gray-300 text-gray-700 font-medium rounded-md hover:bg-gray-50 transition-colors">
             ยกเลิก
           </Link>
-          <button type="submit" disabled={isSubmitting} className="px-6 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 transition-colors disabled:opacity-70 flex items-center">
+          <button type="submit" disabled={isSubmitting} className="px-6 py-2 bg-purple-600 text-white font-medium rounded-md hover:bg-purple-700 transition-colors disabled:opacity-70 flex items-center">
             {isSubmitting ? (
               <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div> บันทึกข้อมูล...</>
             ) : "บันทึกจุดจัดเก็บ"}
@@ -233,5 +295,13 @@ export default function NewArchiveLocationPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function NewArchiveLocationPage() {
+  return (
+    <Suspense fallback={<div className="p-12 text-center text-gray-500">กำลังโหลด...</div>}>
+      <NewArchiveLocationContent />
+    </Suspense>
   );
 }

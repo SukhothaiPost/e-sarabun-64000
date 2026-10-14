@@ -320,10 +320,25 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-4">
-          <Link href="/archive" className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
+          <Link 
+            href={`/archive?cabinet=${encodeURIComponent(location.cabinet)}&shelf=${encodeURIComponent(location.shelf)}`}
+            className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
+            title={`กลับไปที่ ตู้ ${location.cabinet} / ชั้น ${location.shelf}`}
+          >
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
+            <div className="flex items-center gap-1.5 text-xs text-purple-700 font-medium mb-1">
+              <Link href={`/archive?cabinet=${encodeURIComponent(location.cabinet)}`} className="hover:underline">
+                🏛️ ตู้ {location.cabinet}
+              </Link>
+              <span>/</span>
+              <Link href={`/archive?cabinet=${encodeURIComponent(location.cabinet)}&shelf=${encodeURIComponent(location.shelf)}`} className="hover:underline">
+                🪜 ชั้น {location.shelf}
+              </Link>
+              <span>/</span>
+              <span className="font-bold text-gray-700">📁 แฟ้ม {location.folder}</span>
+            </div>
             <div className="flex items-center space-x-3">
               <h1 className="text-2xl font-bold text-gray-900">
                 {location.folder_name || location.sequence || "แฟ้มเอกสาร"}
