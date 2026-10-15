@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { collection, getDocs, doc, setDoc, serverTimestamp, query } from "firebase/firestore";
+import { collection, getDocs, doc, setDoc, serverTimestamp, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { ArchiveLocation, THAIPOST_ORGANIZATIONS } from "@/types";
@@ -28,7 +28,12 @@ import {
   History,
   Save,
   FileText,
-  Trash2
+  Trash2,
+  Table as TableIcon,
+  LayoutGrid,
+  Filter,
+  Eye,
+  FileSpreadsheet
 } from "lucide-react";
 import { compressImage } from "@/lib/imageUtils";
 
@@ -52,9 +57,15 @@ function ArchiveContent() {
   const router = useRouter();
 
   const [locations, setLocations] = useState<ArchiveLocation[]>([]);
+  const [docCountsByLocation, setDocCountsByLocation] = useState<Record<string, number>>({});
   const [structurePhotos, setStructurePhotos] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+
+  // View Mode: 'hierarchy' (มุมมองตู้เอกสาร - โครงสร้างกายภาพ) vs 'table' (มุมมองตารางรวมแฟ้มทั้งหมด)
+  const [viewMode, setViewMode] = useState<"hierarchy" | "table">("hierarchy");
+  const [tableCabinetFilter, setTableCabinetFilter] = useState<string>("all");
+  const [tableCategoryFilter, setTableCategoryFilter] = useState<string>("all");
 
   // Hierarchy Navigation State: 1. ตู้ (Cabinet) -> 2. ชั้นในตู้ (Shelf) -> 3. แฟ้ม (Folder)
   const initialCabinet = searchParams.get("cabinet") || null;
@@ -122,9 +133,10 @@ function ArchiveContent() {
     setTimeout(() => setToastMessage(""), 4000);
   };
 
-  // Fetch locations & structure photos
+  // Fetch locations, structure photos, and document counts
   const fetchAll = async () => {
     try {
+      // 1. Locations
       const qLocs = query(collection(db, "archive_locations"));
       const snapLocs = await getDocs(qLocs);
       const locs: ArchiveLocation[] = [];
@@ -134,7 +146,7 @@ function ArchiveContent() {
       locs.sort((a, b) => a.location_code.localeCompare(b.location_code));
       setLocations(locs);
 
-      // Fetch cabinet & shelf photos
+      // 2. Photos
       const qPhotos = query(collection(db, "archive_structure_photos"));
       const snapPhotos = await getDocs(qPhotos);
       const photoMap: Record<string, string> = {};
@@ -145,6 +157,26 @@ function ArchiveContent() {
         }
       });
       setStructurePhotos(photoMap);
+
+      // 3. Document counts per archive location
+      const qDocs = query(
+        collection(db, "documents"),
+        where("deleted", "==", false)
+      );
+      const snapDocs = await getDocs(qDocs);
+      const counts: Record<string, number> = {};
+      snapDocs.forEach(d => {
+        const data = d.data();
+        const locId = data.archive_location_id;
+        const locCode = data.archive_location_code;
+        if (locId) {
+          counts[locId] = (counts[locId] || 0) + 1;
+        } else if (locCode) {
+          counts[locCode] = (counts[locCode] || 0) + 1;
+        }
+      });
+      setDocCountsByLocation(counts);
+
     } catch (err) {
       console.error("Error fetching archives:", err);
     } finally {
@@ -155,6 +187,11 @@ function ArchiveContent() {
   useEffect(() => {
     fetchAll();
   }, []);
+
+  // Helper to get doc count for a location
+  const getDocCountForLocation = (loc: ArchiveLocation) => {
+    return docCountsByLocation[loc.id] || docCountsByLocation[loc.location_code] || 0;
+  };
 
   // Hierarchical Grouping: Cabinets -> Shelves -> Folders
   const hierarchyData = useMemo(() => {
@@ -170,14 +207,17 @@ function ArchiveContent() {
         categories: Set<string>;
         imageUrl?: string;
         folders: ArchiveLocation[];
+        docCount: number;
       }>;
       totalFolders: number;
+      totalDocs: number;
       categories: Set<string>;
     }>();
 
     for (const loc of locations) {
       const cabId = normalizeCabinet(loc.cabinet);
       const shelfId = normalizeShelf(loc.shelf);
+      const docCount = getDocCountForLocation(loc);
 
       // 1. Cabinet
       if (!cabinetsMap.has(cabId)) {
@@ -189,15 +229,16 @@ function ArchiveContent() {
           imageUrl: structurePhotos[cabKey] || undefined,
           shelvesMap: new Map(),
           totalFolders: 0,
+          totalDocs: 0,
           categories: new Set(),
         });
       }
 
       const cabEntry = cabinetsMap.get(cabId)!;
       cabEntry.totalFolders += 1;
+      cabEntry.totalDocs += docCount;
       if (loc.category) cabEntry.categories.add(loc.category);
       if (!cabEntry.imageUrl && loc.image_url) {
-        // Fallback to location photo if no specific cabinet photo
         cabEntry.imageUrl = loc.image_url;
       }
 
@@ -211,18 +252,20 @@ function ArchiveContent() {
           categories: new Set(),
           imageUrl: structurePhotos[shelfKey] || undefined,
           folders: [],
+          docCount: 0,
         });
       }
 
       const shelfEntry = cabEntry.shelvesMap.get(shelfId)!;
       shelfEntry.folders.push(loc);
+      shelfEntry.docCount += docCount;
       if (loc.category) shelfEntry.categories.add(loc.category);
       if (!shelfEntry.imageUrl && loc.image_url) {
         shelfEntry.imageUrl = loc.image_url;
       }
     }
 
-    // Sort cabinets by natural order
+    // Sort cabinets naturally
     const sortedCabinets = Array.from(cabinetsMap.values()).sort((a, b) => {
       const numA = Number(a.cabinetId);
       const numB = Number(b.cabinetId);
@@ -231,22 +274,43 @@ function ArchiveContent() {
     });
 
     return sortedCabinets;
-  }, [locations, structurePhotos]);
+  }, [locations, structurePhotos, docCountsByLocation]);
 
-  // Current active cabinet and shelf data
+  // Total summary statistics
+  const totalStats = useMemo(() => {
+    let totalCabinets = hierarchyData.length;
+    let totalShelves = 0;
+    let totalFolders = locations.length;
+    let totalDocs = 0;
+
+    for (const cab of hierarchyData) {
+      totalShelves += cab.shelvesMap.size;
+      totalDocs += cab.totalDocs;
+    }
+
+    // Unique categories
+    const categoriesSet = new Set<string>();
+    locations.forEach(l => {
+      if (l.category) categoriesSet.add(l.category);
+    });
+
+    return {
+      totalCabinets,
+      totalShelves,
+      totalFolders,
+      totalDocs,
+      categories: Array.from(categoriesSet).sort(),
+    };
+  }, [hierarchyData, locations]);
+
+  // Current active cabinet data
   const currentCabinetData = useMemo(() => {
     if (!selectedCabinet) return null;
     const norm = normalizeCabinet(selectedCabinet);
     return hierarchyData.find(c => c.cabinetId === norm) || null;
   }, [hierarchyData, selectedCabinet]);
 
-  const currentShelfData = useMemo(() => {
-    if (!currentCabinetData || !selectedShelf) return null;
-    const norm = normalizeShelf(selectedShelf);
-    return currentCabinetData.shelvesMap.get(norm) || null;
-  }, [currentCabinetData, selectedShelf]);
-
-  // Filtered results for search
+  // Filtered results for global search
   const searchResults = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return null;
@@ -261,10 +325,34 @@ function ArchiveContent() {
     );
   }, [locations, searchTerm]);
 
+  // Filtered locations for Table View
+  const tableFilteredLocations = useMemo(() => {
+    return locations.filter(loc => {
+      const cabId = normalizeCabinet(loc.cabinet);
+      if (tableCabinetFilter !== "all" && cabId !== tableCabinetFilter) {
+        return false;
+      }
+      if (tableCategoryFilter !== "all" && loc.category !== tableCategoryFilter) {
+        return false;
+      }
+      if (searchTerm.trim()) {
+        const term = searchTerm.trim().toLowerCase();
+        const matches = 
+          loc.location_code.toLowerCase().includes(term) ||
+          loc.cabinet.toLowerCase().includes(term) ||
+          loc.shelf.toLowerCase().includes(term) ||
+          loc.category.toLowerCase().includes(term) ||
+          loc.folder.toLowerCase().includes(term) ||
+          (loc.folder_name && loc.folder_name.toLowerCase().includes(term)) ||
+          (loc.sequence && loc.sequence.toLowerCase().includes(term));
+        if (!matches) return false;
+      }
+      return true;
+    });
+  }, [locations, tableCabinetFilter, tableCategoryFilter, searchTerm]);
+
   // Handle Photo Upload (เฉพาะตู้เอกสาร - ชั้นและแฟ้มไม่ต้องมีรูป)
-  const handleOpenPhotoModal = (
-    cabinet: string
-  ) => {
+  const handleOpenPhotoModal = (cabinet: string) => {
     const cabId = normalizeCabinet(cabinet);
     const key = `cabinet_${cabId}`;
     const currentUrl = structurePhotos[key] || "";
@@ -368,9 +456,7 @@ function ArchiveContent() {
   const handleOpenGlobalHistModal = () => {
     setHistError("");
     let defaultLocId = "";
-    if (selectedCabinet && selectedShelf && currentShelfData?.folders?.length) {
-      defaultLocId = currentShelfData.folders[0].id;
-    } else if (selectedCabinet && currentCabinetData) {
+    if (selectedCabinet && currentCabinetData) {
       const firstShelf = Array.from(currentCabinetData.shelvesMap.values())[0];
       if (firstShelf?.folders?.length) {
         defaultLocId = firstShelf.folders[0].id;
@@ -499,7 +585,7 @@ function ArchiveContent() {
     <div className="space-y-6">
       {/* Toast Alert */}
       {toastMessage && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-lg flex items-center space-x-2 animate-in fade-in">
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl flex items-center space-x-2 animate-in fade-in shadow-xs">
           <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
           <span className="text-sm font-medium">{toastMessage}</span>
         </div>
@@ -513,7 +599,7 @@ function ArchiveContent() {
             จัดการคลังเอกสาร
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            โครงสร้างกายภาพ 3 ระดับ: <strong>1. ตู้เอกสาร</strong> ➔ <strong>2. ชั้นในตู้</strong> ➔ <strong>3. แฟ้มเอกสาร</strong>
+            ลำดับกายภาพ 3 ระดับ: <strong>1. ตู้เอกสาร</strong> ➔ <strong>2. ชั้นในตู้</strong> ➔ <strong>3. แฟ้มเอกสาร</strong>
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -547,64 +633,44 @@ function ArchiveContent() {
         </div>
       </div>
 
-      {/* Breadcrumb Navigation & Steps Indicator */}
-      <div className="bg-white rounded-xl shadow-xs border border-gray-200 p-4">
+      {/* View Switcher & Search Bar */}
+      <div className="bg-white rounded-2xl shadow-xs border border-gray-200 p-3 sm:p-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          {/* Breadcrumb Links */}
-          <nav className="flex items-center space-x-2 text-sm overflow-x-auto pb-1 md:pb-0">
+          {/* View Mode Toggle Buttons */}
+          <div className="flex items-center bg-gray-100 p-1 rounded-xl self-start">
             <button
-              onClick={() => {
-                setSearchTerm("");
-                setHierarchy(null, null);
-              }}
-              className={`flex items-center px-2.5 py-1.5 rounded-lg transition-colors font-semibold ${
-                !selectedCabinet 
-                  ? "bg-red-100 text-red-900" 
-                  : "text-gray-600 hover:text-red-700 hover:bg-gray-100"
+              type="button"
+              onClick={() => setViewMode("hierarchy")}
+              className={`flex items-center px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                viewMode === "hierarchy"
+                  ? "bg-white text-red-700 shadow-xs"
+                  : "text-gray-600 hover:text-gray-900"
               }`}
             >
-              <Archive className="w-4 h-4 mr-1.5" />
-              1. คลังตู้เอกสารทั้งหมด
+              <LayoutGrid className="w-3.5 h-3.5 mr-1.5" />
+              มุมมองตู้เอกสาร (โครงสร้างกายภาพ)
             </button>
-
-            {selectedCabinet && (
-              <>
-                <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
-                <button
-                  onClick={() => {
-                    setSearchTerm("");
-                    setHierarchy(selectedCabinet, null);
-                  }}
-                  className={`flex items-center px-2.5 py-1.5 rounded-lg transition-colors font-semibold ${
-                    selectedCabinet && !selectedShelf 
-                      ? "bg-red-100 text-red-900" 
-                      : "text-gray-600 hover:text-red-700 hover:bg-gray-100"
-                  }`}
-                >
-                  <Layers className="w-4 h-4 mr-1.5" />
-                  2. ตู้ {selectedCabinet} (ชั้นวาง)
-                </button>
-              </>
-            )}
-
-            {selectedCabinet && selectedShelf && (
-              <>
-                <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
-                <span className="flex items-center px-2.5 py-1.5 rounded-lg font-bold bg-red-600 text-white shadow-xs">
-                  <Folder className="w-4 h-4 mr-1.5" />
-                  3. ชั้น {selectedShelf} (แฟ้มเอกสาร)
-                </span>
-              </>
-            )}
-          </nav>
+            <button
+              type="button"
+              onClick={() => setViewMode("table")}
+              className={`flex items-center px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                viewMode === "table"
+                  ? "bg-white text-red-700 shadow-xs"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              <TableIcon className="w-3.5 h-3.5 mr-1.5" />
+              มุมมองตารางรวมแฟ้มทั้งหมด ({locations.length})
+            </button>
+          </div>
 
           {/* Quick Search across archives */}
-          <div className="relative w-full md:w-72">
+          <div className="relative w-full md:w-80">
             <Search className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="ค้นหาตู้, ชั้น, ชื่อแฟ้ม, รหัส..."
-              className="w-full pl-9 pr-8 py-1.5 text-xs border border-gray-300 rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-red-500 focus:border-red-500"
+              className="w-full pl-9 pr-8 py-2 text-xs border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -620,18 +686,19 @@ function ArchiveContent() {
         </div>
       </div>
 
-      {/* IF SEARCH IS ACTIVE: Show matched folders with breadcrumb path */}
+      {/* Global Search Results Overlay (If user is searching) */}
       {searchResults !== null ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-4 border-b border-gray-200 bg-red-50/50 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-gray-900">
-              ผลการค้นหา: &quot;{searchTerm}&quot; ({searchResults.length} รายการ)
+            <h2 className="text-sm font-bold text-gray-900 flex items-center">
+              <Search className="w-4 h-4 mr-2 text-red-600" />
+              ผลการค้นหา: &quot;{searchTerm}&quot; ({searchResults.length} แฟ้มที่พบ)
             </h2>
             <button
               onClick={() => setSearchTerm("")}
-              className="text-xs text-red-700 hover:underline"
+              className="text-xs text-red-700 hover:underline font-semibold"
             >
-              ล้างการค้นหา (กลับสู่โหมดลำดับตู้/ชั้น/แฟ้ม)
+              ล้างการค้นหา
             </button>
           </div>
 
@@ -642,55 +709,64 @@ function ArchiveContent() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
-              {searchResults.map(loc => (
-                <div key={loc.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow bg-white flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center gap-1.5 text-xs text-red-700 font-medium mb-2 bg-red-50 p-2 rounded-lg border border-red-100">
-                      <span>ตู้ {loc.cabinet}</span>
-                      <ChevronRight className="w-3.5 h-3.5 text-red-400" />
-                      <span>ชั้น {loc.shelf}</span>
-                      <ChevronRight className="w-3.5 h-3.5 text-red-400" />
-                      <span className="font-bold text-gray-900">แฟ้ม {loc.folder}</span>
+              {searchResults.map(loc => {
+                const docCount = getDocCountForLocation(loc);
+                return (
+                  <div key={loc.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow bg-white flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-1.5 text-xs text-red-700 font-medium mb-2 bg-red-50 p-2 rounded-lg border border-red-100">
+                        <span>ตู้ {loc.cabinet}</span>
+                        <ChevronRight className="w-3.5 h-3.5 text-red-400" />
+                        <span>ชั้น {loc.shelf}</span>
+                        <ChevronRight className="w-3.5 h-3.5 text-red-400" />
+                        <span className="font-bold text-gray-900">แฟ้ม {loc.folder}</span>
+                      </div>
+
+                      <p className="font-bold text-gray-900 text-sm mb-1">{loc.folder_name || loc.sequence}</p>
+                      <p className="font-mono text-xs text-red-700 mb-2">{loc.location_code}</p>
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <span>หมวดหมู่: {loc.category}</span>
+                        <span className="font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded">
+                          {docCount} ฉบับ
+                        </span>
+                      </div>
                     </div>
 
-                    <p className="font-bold text-gray-900 text-sm mb-1">{loc.folder_name || loc.sequence}</p>
-                    <p className="font-mono text-xs text-gray-500 mb-2">{loc.location_code}</p>
-                    <p className="text-xs text-gray-500">หมวดหมู่: {loc.category}</p>
+                    <div className="flex items-center justify-between pt-3 mt-3 border-t border-gray-100">
+                      <button
+                        onClick={() => {
+                          setSearchTerm("");
+                          setViewMode("hierarchy");
+                          setHierarchy(normalizeCabinet(loc.cabinet), normalizeShelf(loc.shelf));
+                        }}
+                        className="text-xs text-red-600 hover:underline font-medium"
+                      >
+                        ดูในตู้ {loc.cabinet} →
+                      </button>
+                      <Link
+                        href={`/archive/${loc.id}`}
+                        className="text-xs font-semibold text-red-600 hover:text-red-800 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 transition-colors"
+                      >
+                        เปิดดูเอกสารในแฟ้ม
+                      </Link>
+                    </div>
                   </div>
-
-                  <div className="flex items-center justify-between pt-3 mt-3 border-t border-gray-100">
-                    <button
-                      onClick={() => {
-                        setSearchTerm("");
-                        setHierarchy(normalizeCabinet(loc.cabinet), normalizeShelf(loc.shelf));
-                      }}
-                      className="text-xs text-red-600 hover:underline font-medium"
-                    >
-                      ดูทั้งชั้นนี้ →
-                    </button>
-                    <Link
-                      href={`/archive/${loc.id}`}
-                      className="text-xs font-semibold text-red-600 hover:text-red-800 bg-red-50 px-2.5 py-1 rounded-md border border-red-100"
-                    >
-                      ดูเอกสารในแฟ้ม
-                    </Link>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       ) : loading ? (
-        <div className="p-16 text-center text-gray-500 bg-white rounded-xl border border-gray-200 shadow-sm">
+        <div className="p-16 text-center text-gray-500 bg-white rounded-2xl border border-gray-200 shadow-sm">
           <div className="h-8 w-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
           กำลังโหลดข้อมูลคลังเอกสาร...
         </div>
-      ) : hierarchyData.length === 0 ? (
-        <div className="p-16 text-center bg-white rounded-xl border border-gray-200 shadow-sm">
+      ) : locations.length === 0 ? (
+        <div className="p-16 text-center bg-white rounded-2xl border border-gray-200 shadow-sm">
           <Archive className="h-14 w-14 mx-auto text-gray-300 mb-3" />
           <p className="text-lg font-bold text-gray-800">ยังไม่มีข้อมูลจุดจัดเก็บในคลังเอกสาร</p>
           <p className="text-sm text-gray-500 mt-1 mb-5">
-            เริ่มต้นเพิ่มตู้ ชั้น และแฟ้มจัดเก็บเอกสารตัวจริงเพื่อใช้งานระบบ
+            เริ่มต้นเพิ่มตู้ ชั้น และแฟ้มจัดเก็บเอกสารตัวจริงเพื่อเริ่มใช้งาน
           </p>
           <Link
             href="/archive/new"
@@ -700,334 +776,591 @@ function ArchiveContent() {
             เพิ่มตู้และจุดจัดเก็บแรก
           </Link>
         </div>
-      ) : !selectedCabinet ? (
+      ) : viewMode === "table" ? (
         /* ========================================================
-           LEVEL 1: รายการตู้เอกสาร (CABINETS VIEW)
+           VIEW MODE 2: มุมมองตารางรวมแฟ้มทั้งหมด (TABLE DIRECTORY)
            ======================================================== */
         <div className="space-y-4">
-          <div className="flex items-center justify-between bg-white px-5 py-3 rounded-xl border border-gray-200 shadow-2xs">
-            <div>
-              <h2 className="text-base font-bold text-gray-900">
-                1. ตู้เอกสารทั้งหมด ({hierarchyData.length} ตู้)
-              </h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                คลิกเลือกตู้ เพื่อเปิดดูชั้นวางเอกสารภายในตู้นั้นๆ
-              </p>
+          {/* Summary Stat Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-2xs">
+              <span className="text-xs font-semibold text-gray-500">ตู้เอกสารทั้งหมด</span>
+              <p className="text-xl font-bold text-gray-900 mt-1">{totalStats.totalCabinets} ตู้</p>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-2xs">
+              <span className="text-xs font-semibold text-gray-500">ชั้นวางทั้งหมด</span>
+              <p className="text-xl font-bold text-gray-900 mt-1">{totalStats.totalShelves} ชั้น</p>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-2xs">
+              <span className="text-xs font-semibold text-gray-500">แฟ้มเอกสารทั้งหมด</span>
+              <p className="text-xl font-bold text-red-600 mt-1">{totalStats.totalFolders} แฟ้ม</p>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-2xs">
+              <span className="text-xs font-semibold text-gray-500">เอกสารที่จัดเก็บในคลัง</span>
+              <p className="text-xl font-bold text-gray-900 mt-1">{totalStats.totalDocs} ฉบับ</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {hierarchyData.map(cab => {
-              const cabPhoto = structurePhotos[`cabinet_${cab.cabinetId}`] || cab.imageUrl;
-              const shelvesCount = cab.shelvesMap.size;
-              const catsList = Array.from(cab.categories).slice(0, 3).join(", ");
-
-              return (
-                <div 
-                  key={cab.cabinetId}
-                  className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-lg hover:border-red-300 transition-all overflow-hidden flex flex-col justify-between group"
+          {/* Table Filters & Toolbar */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-semibold text-gray-600">กรองตามตู้:</span>
+                <select
+                  value={tableCabinetFilter}
+                  onChange={(e) => setTableCabinetFilter(e.target.value)}
+                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-red-500"
                 >
-                  <div>
-                    {/* Cabinet Photo or Graphic Header */}
-                    <div className="relative h-44 bg-gradient-to-br from-slate-100 to-red-50/40 border-b border-gray-100 overflow-hidden">
-                      {cabPhoto ? (
-                        <>
-                          <img 
-                            src={cabPhoto} 
-                            alt={cab.displayName}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 cursor-pointer"
-                            onClick={() => setPreviewImage({
-                              url: cabPhoto,
-                              title: cab.displayName,
-                              subtitle: `มี ${shelvesCount} ชั้นวาง • ทั้งหมด ${cab.totalFolders} แฟ้มเอกสาร`
-                            })}
-                          />
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPreviewImage({
-                                url: cabPhoto,
-                                title: cab.displayName,
-                                subtitle: `มี ${shelvesCount} ชั้นวาง • ทั้งหมด ${cab.totalFolders} แฟ้มเอกสาร`
-                              });
-                            }}
-                            className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white p-1.5 rounded-lg backdrop-blur-sm transition-colors text-xs flex items-center shadow-xs"
-                            title="กดดูรูปตู้ขนาดเต็ม"
-                          >
-                            <Maximize2 className="w-3.5 h-3.5 mr-1" />
-                            ดูรูปตู้
-                          </button>
-                        </>
-                      ) : (
-                        <div 
-                          className="w-full h-full flex flex-col items-center justify-center text-gray-400 cursor-pointer p-4 hover:bg-red-50/60 transition-colors"
-                          onClick={() => setHierarchy(cab.cabinetId, null)}
-                        >
-                          <Archive className="w-14 h-14 text-red-300 mb-1.5 stroke-[1.5]" />
-                          <span className="text-xs font-medium text-gray-500">คลิกเพื่อเปิดดูชั้นในตู้</span>
-                        </div>
-                      )}
-
-                      {/* Cabinet ID badge overlay */}
-                      <div className="absolute bottom-2 left-2 bg-slate-900/85 backdrop-blur-sm text-white px-3 py-1 rounded-lg text-xs font-bold shadow-xs">
-                        🏛️ {cab.displayName}
-                      </div>
-                    </div>
-
-                    {/* Card Body */}
-                    <div className="p-5 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h3 
-                          onClick={() => setHierarchy(cab.cabinetId, null)}
-                          className="text-lg font-bold text-gray-900 group-hover:text-red-600 cursor-pointer transition-colors"
-                        >
-                          {cab.displayName}
-                        </h3>
-                        <span className="text-xs font-semibold px-2.5 py-1 bg-red-50 text-red-700 rounded-lg border border-red-200">
-                          {shelvesCount} ชั้นวาง
-                        </span>
-                      </div>
-
-                      <div className="text-xs text-gray-600 space-y-1.5">
-                        <p className="flex items-center justify-between">
-                          <span className="text-gray-400 font-medium">จำนวนแฟ้มทั้งหมด:</span>
-                          <span className="font-bold text-gray-800">{cab.totalFolders} แฟ้ม</span>
-                        </p>
-                        {catsList && (
-                          <p className="text-gray-500 line-clamp-1">
-                            <span className="text-gray-400 font-medium">หมวดหมู่:</span> {catsList}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card Actions Footer */}
-                  <div className="p-4 pt-0 space-y-2">
-                    <button
-                      onClick={() => setHierarchy(cab.cabinetId, null)}
-                      className="w-full flex items-center justify-center bg-red-50 hover:bg-red-600 text-red-700 hover:text-white font-semibold py-2.5 px-4 rounded-xl transition-all text-xs border border-red-200 hover:border-red-600 shadow-2xs group-hover:bg-red-600 group-hover:text-white"
-                    >
-                      <span>เปิดดูชั้นในตู้ ({shelvesCount} ชั้น)</span>
-                      <ChevronRight className="w-4 h-4 ml-1" />
-                    </button>
-
-                    {appUser?.role !== "viewer" && (
-                      <div className="flex justify-end pt-1">
-                        <button
-                          onClick={() => handleOpenPhotoModal(cab.cabinetId)}
-                          className="text-[11px] text-gray-500 hover:text-red-700 flex items-center font-medium"
-                        >
-                          <Camera className="w-3.5 h-3.5 mr-1 text-red-500" />
-                          {cabPhoto ? "เปลี่ยนรูปถ่ายตู้" : "+ ถ่ายรูป/เพิ่มรูปตู้"}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : !selectedShelf ? (
-        /* ========================================================
-           LEVEL 2: รายการชั้นวางในตู้ (SHELVES VIEW)
-           ======================================================== */
-        <div className="space-y-5">
-          {/* Active Cabinet Banner */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => setHierarchy(null, null)}
-                className="p-2 hover:bg-gray-100 rounded-xl transition-colors text-gray-600"
-                title="กลับไปหน้ารวมตู้"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-bold text-gray-900">
-                    🏛️ ตู้ {selectedCabinet}
-                  </h2>
-                  <span className="text-xs font-semibold px-2.5 py-0.5 bg-red-100 text-red-800 rounded-md">
-                    {currentCabinetData ? currentCabinetData.shelvesMap.size : 0} ชั้นวาง
-                  </span>
-                  <span className="text-xs font-semibold px-2.5 py-0.5 bg-blue-100 text-blue-800 rounded-md">
-                    {currentCabinetData ? currentCabinetData.totalFolders : 0} แฟ้ม
-                  </span>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  ขั้นตอนที่ 2: เลือกชั้นวาง เพื่อเปิดดูแฟ้มเอกสารที่จัดวางอยู่ในชั้นนี้
-                </p>
+                  <option value="all">ทุกตู้ ({totalStats.totalCabinets} ตู้)</option>
+                  {hierarchyData.map(cab => (
+                    <option key={cab.cabinetId} value={cab.cabinetId}>
+                      ตู้ {cab.cabinetId} ({cab.totalFolders} แฟ้ม)
+                    </option>
+                  ))}
+                </select>
               </div>
+
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-semibold text-gray-600">กรองตามหมวดหมู่:</span>
+                <select
+                  value={tableCategoryFilter}
+                  onChange={(e) => setTableCategoryFilter(e.target.value)}
+                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-red-500"
+                >
+                  <option value="all">ทุกหมวดหมู่งาน</option>
+                  {totalStats.categories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              {(tableCabinetFilter !== "all" || tableCategoryFilter !== "all") && (
+                <button
+                  onClick={() => {
+                    setTableCabinetFilter("all");
+                    setTableCategoryFilter("all");
+                  }}
+                  className="text-xs text-red-600 hover:underline font-semibold"
+                >
+                  ล้างตัวกรอง
+                </button>
+              )}
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              {structurePhotos[`cabinet_${normalizeCabinet(selectedCabinet)}`] && (
-                <button
-                  onClick={() => setPreviewImage({
-                    url: structurePhotos[`cabinet_${normalizeCabinet(selectedCabinet)}`],
-                    title: `รูปถ่าย ตู้ ${selectedCabinet}`,
-                  })}
-                  className="flex items-center text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg border border-red-200"
-                >
-                  <Maximize2 className="w-3.5 h-3.5 mr-1" />
-                  ดูรูปตู้จริง
-                </button>
-              )}
-              {appUser?.role !== "viewer" && (
-                <button
-                  onClick={() => handleOpenPhotoModal(selectedCabinet)}
-                  className="flex items-center text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg"
-                >
-                  <Camera className="w-3.5 h-3.5 mr-1 text-red-600" />
-                  ถ่ายรูป/เปลี่ยนรูปตู้
-                </button>
-              )}
-            </div>
+            <span className="text-xs text-gray-500">
+              แสดง <strong>{tableFilteredLocations.length}</strong> จาก {locations.length} แฟ้ม
+            </span>
           </div>
 
-          {/* Shelves Grid (ชั้นที่จัดวาง - ไม่มีรูปภาพ) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {currentCabinetData && Array.from(currentCabinetData.shelvesMap.values()).map(shelf => {
-              const cats = Array.from(shelf.categories).join(", ");
+          {/* Directory Table */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 text-left text-xs">
+                <thead className="bg-gray-50 text-gray-600 font-semibold">
+                  <tr>
+                    <th scope="col" className="px-4 py-3">รหัสสถานที่จัดเก็บ</th>
+                    <th scope="col" className="px-4 py-3">ชื่อแฟ้มเอกสาร</th>
+                    <th scope="col" className="px-4 py-3">ตำแหน่ง (ตู้/ชั้น/เลขที่แฟ้ม)</th>
+                    <th scope="col" className="px-4 py-3">หมวดหมู่งาน</th>
+                    <th scope="col" className="px-4 py-3 text-center">เอกสารในแฟ้ม</th>
+                    <th scope="col" className="px-4 py-3 text-right">การจัดการ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {tableFilteredLocations.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-12 text-center text-gray-400">
+                        ไม่พบแฟ้มเอกสารตามเงื่อนไขที่เลือก
+                      </td>
+                    </tr>
+                  ) : (
+                    tableFilteredLocations.map(loc => {
+                      const cabId = normalizeCabinet(loc.cabinet);
+                      const cabPhoto = structurePhotos[`cabinet_${cabId}`] || loc.image_url;
+                      const docCount = getDocCountForLocation(loc);
 
-              return (
-                <div
-                  key={shelf.shelfId}
-                  className="bg-white rounded-2xl border border-gray-200 shadow-xs hover:shadow-md hover:border-red-300 transition-all p-5 flex flex-col justify-between group"
-                >
-                  <div className="space-y-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-12 h-12 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center text-red-600 group-hover:bg-red-600 group-hover:text-white transition-colors shrink-0">
-                          <Layers className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <h3 
-                            onClick={() => setHierarchy(selectedCabinet, shelf.shelfId)}
-                            className="text-lg font-bold text-gray-900 group-hover:text-red-600 cursor-pointer transition-colors"
-                          >
-                            {shelf.displayName}
-                          </h3>
-                          <p className="text-xs text-gray-500">
-                            ตู้ {selectedCabinet}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-xs font-bold px-2.5 py-1 bg-red-50 text-red-700 rounded-lg border border-red-200">
-                        {shelf.folders.length} แฟ้ม
-                      </span>
-                    </div>
-
-                    {cats && (
-                      <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-xs">
-                        <span className="text-gray-400 font-medium">หมวดหมู่ในชั้น:</span>
-                        <p className="text-gray-800 font-semibold mt-0.5 line-clamp-2">{cats}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Shelf Actions Footer */}
-                  <div className="pt-4 mt-2 border-t border-gray-100">
-                    <button
-                      onClick={() => setHierarchy(selectedCabinet, shelf.shelfId)}
-                      className="w-full flex items-center justify-center bg-red-50 hover:bg-red-600 text-red-700 hover:text-white font-semibold py-2.5 px-4 rounded-xl transition-all text-xs border border-red-200 hover:border-red-600 shadow-2xs group-hover:bg-red-600 group-hover:text-white"
-                    >
-                      <span>เปิดดูแฟ้มในชั้นนี้ ({shelf.folders.length} แฟ้ม)</span>
-                      <ChevronRight className="w-4 h-4 ml-1" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                      return (
+                        <tr key={loc.id} className="hover:bg-red-50/20 transition-colors">
+                          <td className="px-4 py-3 font-mono font-bold text-red-900 whitespace-nowrap">
+                            {loc.location_code}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="font-bold text-gray-900 block text-sm">
+                              {loc.folder_name || loc.sequence}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              {cabPhoto && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewImage({
+                                    url: cabPhoto,
+                                    title: `รูปถ่าย ตู้ ${cabId}`,
+                                    subtitle: `แฟ้ม: ${loc.folder_name || loc.sequence} (${loc.location_code})`
+                                  })}
+                                  className="text-red-600 hover:text-red-800"
+                                  title="ดูรูปตู้จริง"
+                                >
+                                  <Camera className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              <span className="font-semibold text-gray-800">
+                                ตู้ {loc.cabinet} / ชั้น {loc.shelf} / แฟ้ม {loc.folder}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-gray-600">
+                            <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-700">
+                              {loc.category || "-"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center whitespace-nowrap">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                              docCount > 0 
+                                ? "bg-red-50 text-red-700 border border-red-200" 
+                                : "bg-gray-100 text-gray-500"
+                            }`}>
+                              {docCount} ฉบับ
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right whitespace-nowrap space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setViewMode("hierarchy");
+                                setHierarchy(normalizeCabinet(loc.cabinet), normalizeShelf(loc.shelf));
+                              }}
+                              className="text-gray-500 hover:text-red-700 font-medium"
+                              title="เปิดดูในมุมมองตู้"
+                            >
+                              ดูในตู้
+                            </button>
+                            <Link
+                              href={`/archive/${loc.id}`}
+                              className="inline-flex items-center px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold shadow-2xs transition-colors"
+                            >
+                              เปิดดูเอกสาร
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       ) : (
         /* ========================================================
-           LEVEL 3: รายการแฟ้มเอกสารบนชั้น (FOLDERS VIEW)
+           VIEW MODE 1: มุมมองตู้เอกสาร (PHYSICAL CABINET VIEW)
            ======================================================== */
-        <div className="space-y-5">
-          {/* Active Shelf Banner */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center space-x-4">
+        <div className="space-y-6">
+          {/* Quick Cabinet Selector Bar (Fast 1-click Navigation Between Cabinets) */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-2 sm:p-3 shadow-xs">
+            <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-thin">
               <button
-                onClick={() => setHierarchy(selectedCabinet, null)}
-                className="p-2 hover:bg-gray-100 rounded-xl transition-colors text-gray-600"
-                title="กลับไปเลือกชั้นอื่นในตู้นี้"
+                type="button"
+                onClick={() => setHierarchy(null, null)}
+                className={`flex items-center px-4 py-2 rounded-xl text-xs font-bold shrink-0 transition-all ${
+                  selectedCabinet === null
+                    ? "bg-red-600 text-white shadow-xs"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
               >
-                <ArrowLeft className="w-5 h-5" />
+                <Archive className="w-3.5 h-3.5 mr-1.5" />
+                ตู้ทั้งหมด ({hierarchyData.length})
               </button>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-bold text-gray-900">
-                    📁 ตู้ {selectedCabinet} / ชั้น {selectedShelf}
-                  </h2>
-                  <span className="text-xs font-semibold px-2.5 py-0.5 bg-red-100 text-red-800 rounded-md">
-                    {currentShelfData ? currentShelfData.folders.length : 0} แฟ้มเอกสาร
-                  </span>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  ขั้นตอนที่ 3: แฟ้มเอกสารทั้งหมดที่จัดวางอยู่บนชั้นนี้ คลิกเพื่อเปิดดูรายละเอียดและเอกสารภายในแฟ้ม
-                </p>
-              </div>
+
+              {hierarchyData.map(cab => {
+                const isSelected = selectedCabinet !== null && normalizeCabinet(selectedCabinet) === cab.cabinetId;
+                return (
+                  <button
+                    key={cab.cabinetId}
+                    type="button"
+                    onClick={() => setHierarchy(cab.cabinetId, null)}
+                    className={`flex items-center px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all ${
+                      isSelected
+                        ? "bg-red-600 text-white shadow-md shadow-red-200"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    <span>🏛️ ตู้ {cab.cabinetId}</span>
+                    <span className={`ml-2 px-1.5 py-0.5 rounded-md text-[10px] ${
+                      isSelected ? "bg-white/25 text-white" : "bg-gray-200 text-gray-600"
+                    }`}>
+                      {cab.totalFolders} แฟ้ม
+                    </span>
+                  </button>
+                );
+              })}
+
+              <Link
+                href="/archive/new"
+                className="flex items-center px-3 py-2 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 border border-dashed border-red-300 shrink-0 ml-auto transition-colors"
+                title="เพิ่มตู้หรือแฟ้มใหม่"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                เพิ่มตู้/แฟ้ม
+              </Link>
             </div>
           </div>
 
-          {/* Folders on this Shelf */}
-          {currentShelfData && currentShelfData.folders.length === 0 ? (
-            <div className="p-12 text-center bg-white rounded-xl border border-dashed border-gray-300">
-              <Folder className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm font-bold text-gray-700">ยังไม่มีแฟ้มบนชั้นนี้</p>
-              <Link
-                href={`/archive/new?cabinet=${selectedCabinet}&shelf=${selectedShelf}`}
-                className="inline-flex items-center text-xs font-semibold text-red-600 hover:underline mt-2"
-              >
-                <Plus className="w-3.5 h-3.5 mr-1" />
-                เพิ่มแฟ้มใหม่บนชั้นนี้
-              </Link>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {currentShelfData && currentShelfData.folders.map(loc => (
-                <Link
-                  key={loc.id}
-                  href={`/archive/${loc.id}`}
-                  className="border border-gray-200 rounded-xl p-5 hover:shadow-lg hover:border-red-300 hover:bg-red-50/20 transition-all cursor-pointer block group bg-white flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center min-w-0">
-                        <Folder className="h-5 w-5 text-red-600 mr-2 shrink-0" />
-                        <span className="font-mono font-bold text-xs text-red-900 group-hover:text-red-700 truncate">
-                          {loc.location_code}
-                        </span>
+          {/* If NO cabinet is selected: Show Overview of All Cabinets */}
+          {!selectedCabinet ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between bg-white px-5 py-3 rounded-2xl border border-gray-200 shadow-2xs">
+                <div>
+                  <h2 className="text-base font-bold text-gray-900">
+                    🏛️ ตู้เอกสารทั้งหมด ({hierarchyData.length} ตู้)
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    คลิกเลือกตู้ เพื่อเปิดดูชั้นวางและแฟ้มเอกสารทั้งหมดที่จัดวางอยู่ภายในตู้
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {hierarchyData.map(cab => {
+                  const cabPhoto = structurePhotos[`cabinet_${cab.cabinetId}`] || cab.imageUrl;
+                  const shelvesCount = cab.shelvesMap.size;
+                  const catsList = Array.from(cab.categories).slice(0, 3).join(", ");
+
+                  return (
+                    <div 
+                      key={cab.cabinetId}
+                      className="bg-white rounded-2xl border border-gray-200 shadow-xs hover:shadow-lg hover:border-red-300 transition-all overflow-hidden flex flex-col justify-between group"
+                    >
+                      <div>
+                        {/* Cabinet Photo or Graphic Header */}
+                        <div className="relative h-44 bg-gradient-to-br from-slate-100 to-red-50/40 border-b border-gray-100 overflow-hidden">
+                          {cabPhoto ? (
+                            <>
+                              <img 
+                                src={cabPhoto} 
+                                alt={cab.displayName}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 cursor-pointer"
+                                onClick={() => setPreviewImage({
+                                  url: cabPhoto,
+                                  title: cab.displayName,
+                                  subtitle: `มี ${shelvesCount} ชั้นวาง • ทั้งหมด ${cab.totalFolders} แฟ้มเอกสาร (${cab.totalDocs} ฉบับ)`
+                                })}
+                              />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreviewImage({
+                                    url: cabPhoto,
+                                    title: cab.displayName,
+                                    subtitle: `มี ${shelvesCount} ชั้นวาง • ทั้งหมด ${cab.totalFolders} แฟ้มเอกสาร (${cab.totalDocs} ฉบับ)`
+                                  });
+                                }}
+                                className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white p-1.5 rounded-lg backdrop-blur-sm transition-colors text-xs flex items-center shadow-xs"
+                                title="กดดูรูปตู้ขนาดเต็ม"
+                              >
+                                <Maximize2 className="w-3.5 h-3.5 mr-1" />
+                                ดูรูปตู้จริง
+                              </button>
+                            </>
+                          ) : (
+                            <div 
+                              className="w-full h-full flex flex-col items-center justify-center text-gray-400 cursor-pointer p-4 hover:bg-red-50/60 transition-colors"
+                              onClick={() => setHierarchy(cab.cabinetId, null)}
+                            >
+                              <Archive className="w-14 h-14 text-red-300 mb-1.5 stroke-[1.5]" />
+                              <span className="text-xs font-medium text-gray-500">คลิกเพื่อเปิดดูชั้นในตู้</span>
+                            </div>
+                          )}
+
+                          {/* Cabinet ID badge overlay */}
+                          <div className="absolute bottom-2 left-2 bg-slate-900/85 backdrop-blur-sm text-white px-3 py-1 rounded-lg text-xs font-bold shadow-xs">
+                            🏛️ {cab.displayName}
+                          </div>
+                        </div>
+
+                        {/* Card Body */}
+                        <div className="p-5 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h3 
+                              onClick={() => setHierarchy(cab.cabinetId, null)}
+                              className="text-lg font-bold text-gray-900 group-hover:text-red-600 cursor-pointer transition-colors"
+                            >
+                              {cab.displayName}
+                            </h3>
+                            <span className="text-xs font-semibold px-2.5 py-1 bg-red-50 text-red-700 rounded-lg border border-red-200">
+                              {shelvesCount} ชั้นวาง
+                            </span>
+                          </div>
+
+                          <div className="text-xs text-gray-600 space-y-1.5">
+                            <p className="flex items-center justify-between">
+                              <span className="text-gray-400 font-medium">จำนวนแฟ้มทั้งหมด:</span>
+                              <span className="font-bold text-gray-800">{cab.totalFolders} แฟ้ม</span>
+                            </p>
+                            <p className="flex items-center justify-between">
+                              <span className="text-gray-400 font-medium">จำนวนเอกสารในตู้:</span>
+                              <span className="font-bold text-red-700">{cab.totalDocs} ฉบับ</span>
+                            </p>
+                            {catsList && (
+                              <p className="text-gray-500 line-clamp-1">
+                                <span className="text-gray-400 font-medium">หมวดหมู่:</span> {catsList}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card Actions Footer */}
+                      <div className="p-4 pt-0 space-y-2">
+                        <button
+                          onClick={() => setHierarchy(cab.cabinetId, null)}
+                          className="w-full flex items-center justify-center bg-red-50 hover:bg-red-600 text-red-700 hover:text-white font-semibold py-2.5 px-4 rounded-xl transition-all text-xs border border-red-200 hover:border-red-600 shadow-2xs group-hover:bg-red-600 group-hover:text-white"
+                        >
+                          <span>เปิดดูชั้นและแฟ้มในตู้นี้ ({cab.totalFolders} แฟ้ม)</span>
+                          <ChevronRight className="w-4 h-4 ml-1" />
+                        </button>
+
+                        {appUser?.role !== "viewer" && (
+                          <div className="flex justify-end pt-1">
+                            <button
+                              onClick={() => handleOpenPhotoModal(cab.cabinetId)}
+                              className="text-[11px] text-gray-500 hover:text-red-700 flex items-center font-medium"
+                            >
+                              <Camera className="w-3.5 h-3.5 mr-1 text-red-500" />
+                              {cabPhoto ? "เปลี่ยนรูปถ่ายตู้" : "+ ถ่ายรูป/เพิ่มรูปตู้"}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
-
-                    <div className="space-y-1 mb-3">
-                      <h4 className="text-base font-bold text-gray-900 group-hover:text-red-700 transition-colors">
-                        {loc.folder_name || loc.sequence || "แฟ้มเอกสาร"}
-                      </h4>
-                      <p className="text-xs text-gray-500">
-                        เลขที่แฟ้ม: <strong className="text-gray-800">{loc.folder}</strong> • หมวด: {loc.category}
-                      </p>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* ========================================================
+               CABINET SELECTED: OPEN CABINET VIEW (SHOW ALL SHELVES & FOLDERS)
+               ======================================================== */
+            <div className="space-y-6">
+              {/* Active Cabinet Header Banner */}
+              <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex items-center space-x-4">
+                  <button
+                    onClick={() => setHierarchy(null, null)}
+                    className="p-2.5 hover:bg-gray-100 rounded-xl transition-colors text-gray-600 shrink-0"
+                    title="กลับไปดูตู้ทั้งหมด"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-xl font-bold text-gray-900">
+                        🏛️ ตู้ {selectedCabinet}
+                      </h2>
+                      <span className="text-xs font-semibold px-2.5 py-0.5 bg-red-100 text-red-800 rounded-lg">
+                        {currentCabinetData ? currentCabinetData.shelvesMap.size : 0} ชั้นวาง
+                      </span>
+                      <span className="text-xs font-semibold px-2.5 py-0.5 bg-blue-100 text-blue-800 rounded-lg">
+                        {currentCabinetData ? currentCabinetData.totalFolders : 0} แฟ้ม
+                      </span>
+                      <span className="text-xs font-semibold px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-lg">
+                        {currentCabinetData ? currentCabinetData.totalDocs : 0} ฉบับ
+                      </span>
                     </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      ชั้นวางและแฟ้มเอกสารทั้งหมดที่จัดวางอยู่ใน ตู้ {selectedCabinet} (ชั้นและแฟ้มไม่มีรูปถ่าย ให้ดูตามหมายเลข)
+                    </p>
                   </div>
+                </div>
 
-                  <div className="flex items-center text-xs font-semibold text-red-600 group-hover:text-red-700 pt-3 border-t border-gray-100 justify-between">
-                    <span>เปิดดูเอกสารและรายละเอียดแฟ้ม</span>
-                    <span className="text-base font-bold transition-transform group-hover:translate-x-1">→</span>
-                  </div>
-                </Link>
-              ))}
+                <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                  {structurePhotos[`cabinet_${normalizeCabinet(selectedCabinet)}`] && (
+                    <button
+                      onClick={() => setPreviewImage({
+                        url: structurePhotos[`cabinet_${normalizeCabinet(selectedCabinet)}`],
+                        title: `รูปถ่าย ตู้ ${selectedCabinet}`,
+                        subtitle: `${currentCabinetData?.shelvesMap.size || 0} ชั้นวาง • ${currentCabinetData?.totalFolders || 0} แฟ้ม`
+                      })}
+                      className="flex items-center text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 px-3.5 py-2 rounded-xl border border-red-200 transition-colors"
+                    >
+                      <Maximize2 className="w-3.5 h-3.5 mr-1.5" />
+                      ดูรูปตู้จริง
+                    </button>
+                  )}
+                  {appUser?.role !== "viewer" && (
+                    <button
+                      onClick={() => handleOpenPhotoModal(selectedCabinet)}
+                      className="flex items-center text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-xl transition-colors"
+                    >
+                      <Camera className="w-3.5 h-3.5 mr-1.5 text-red-600" />
+                      ถ่ายรูป/เปลี่ยนรูปตู้
+                    </button>
+                  )}
+                  <Link
+                    href={`/archive/new?cabinet=${selectedCabinet}`}
+                    className="flex items-center text-xs font-semibold text-white bg-red-600 hover:bg-red-700 px-3.5 py-2 rounded-xl shadow-xs transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    เพิ่มแฟ้มในตู้นี้
+                  </Link>
+                </div>
+              </div>
+
+              {/* Shelf Filter Tabs (ดูทุกชั้น หรือเลือกเฉพาะชั้น) */}
+              {currentCabinetData && currentCabinetData.shelvesMap.size > 0 && (
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                  <span className="text-gray-500 font-semibold px-2 shrink-0 flex items-center">
+                    <Filter className="w-3.5 h-3.5 mr-1 text-gray-400" />
+                    ชั้นวาง:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setHierarchy(selectedCabinet, null)}
+                    className={`px-3 py-1.5 rounded-lg font-bold shrink-0 transition-all ${
+                      selectedShelf === null
+                        ? "bg-red-600 text-white shadow-xs"
+                        : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50"
+                    }`}
+                  >
+                    ดูทุกชั้นวาง ({currentCabinetData.totalFolders} แฟ้ม)
+                  </button>
+
+                  {Array.from(currentCabinetData.shelvesMap.values()).map(shelf => {
+                    const isShelfSelected = selectedShelf !== null && normalizeShelf(selectedShelf) === shelf.shelfId;
+                    return (
+                      <button
+                        key={shelf.shelfId}
+                        type="button"
+                        onClick={() => setHierarchy(selectedCabinet, shelf.shelfId)}
+                        className={`px-3 py-1.5 rounded-lg font-bold shrink-0 transition-all ${
+                          isShelfSelected
+                            ? "bg-red-600 text-white shadow-xs"
+                            : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50"
+                        }`}
+                      >
+                        🪜 ชั้น {shelf.shelfId} ({shelf.folders.length})
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Stacked Real-World Shelves in this Cabinet */}
+              <div className="space-y-6">
+                {currentCabinetData && Array.from(currentCabinetData.shelvesMap.values())
+                  .filter(shelf => {
+                    if (!selectedShelf) return true; // Show all shelves stacked
+                    return shelf.shelfId === normalizeShelf(selectedShelf); // Filtered shelf
+                  })
+                  .map(shelf => {
+                    const cats = Array.from(shelf.categories);
+
+                    return (
+                      <div 
+                        key={shelf.shelfId}
+                        className="bg-white rounded-2xl border border-gray-200 shadow-2xs overflow-hidden"
+                      >
+                        {/* Shelf Header Strip */}
+                        <div className="bg-gradient-to-r from-red-50/80 via-white to-gray-50 px-5 py-3.5 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="flex items-center space-x-3">
+                            <span className="flex items-center px-3 py-1 rounded-lg text-sm font-bold bg-red-600 text-white shadow-2xs">
+                              🪜 ชั้น {shelf.shelfId}
+                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs text-gray-500 font-semibold">
+                                {shelf.folders.length} แฟ้ม • {shelf.docCount} ฉบับ
+                              </span>
+                              {cats.length > 0 && (
+                                <span className="text-xs text-gray-400">
+                                  ({cats.join(", ")})
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center space-x-2">
+                            <Link
+                              href={`/archive/new?cabinet=${selectedCabinet}&shelf=${shelf.shelfId}`}
+                              className="inline-flex items-center text-xs font-semibold text-red-700 hover:text-red-900 bg-white hover:bg-red-50 px-3 py-1.5 rounded-lg border border-red-200 transition-colors shadow-2xs"
+                            >
+                              <Plus className="w-3.5 h-3.5 mr-1" />
+                              เพิ่มแฟ้มในชั้นนี้
+                            </Link>
+                          </div>
+                        </div>
+
+                        {/* Folders Placed on this Shelf */}
+                        <div className="p-4 sm:p-5">
+                          {shelf.folders.length === 0 ? (
+                            <div className="p-8 text-center text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                              ยังไม่มีแฟ้มบนชั้นนี้
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {shelf.folders.map(loc => {
+                                const docCount = getDocCountForLocation(loc);
+
+                                return (
+                                  <Link
+                                    key={loc.id}
+                                    href={`/archive/${loc.id}`}
+                                    className="border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-red-300 hover:bg-red-50/20 transition-all cursor-pointer block group bg-white flex flex-col justify-between"
+                                  >
+                                    <div>
+                                      {/* Folder Code and Number Tag */}
+                                      <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center min-w-0">
+                                          <Folder className="h-4 w-4 text-red-600 mr-1.5 shrink-0" />
+                                          <span className="font-mono font-bold text-xs text-red-900 group-hover:text-red-700 truncate">
+                                            {loc.location_code}
+                                          </span>
+                                        </div>
+                                        <span className="text-[11px] font-bold px-2 py-0.5 bg-gray-100 text-gray-700 rounded group-hover:bg-red-100 group-hover:text-red-800 transition-colors shrink-0">
+                                          เลขที่ {loc.folder}
+                                        </span>
+                                      </div>
+
+                                      {/* Folder Title */}
+                                      <h4 className="text-sm font-bold text-gray-900 group-hover:text-red-700 transition-colors mb-1.5 line-clamp-2">
+                                        {loc.folder_name || loc.sequence || "แฟ้มเอกสาร"}
+                                      </h4>
+
+                                      <p className="text-xs text-gray-500 mb-3">
+                                        หมวด: <span className="text-gray-700 font-medium">{loc.category}</span>
+                                      </p>
+                                    </div>
+
+                                    {/* Footer with Doc Count and Action Button */}
+                                    <div className="flex items-center justify-between pt-3 border-t border-gray-100 text-xs">
+                                      <span className={`font-semibold px-2 py-0.5 rounded ${
+                                        docCount > 0 
+                                          ? "bg-red-50 text-red-700 border border-red-100" 
+                                          : "bg-gray-50 text-gray-400"
+                                      }`}>
+                                        📄 {docCount} ฉบับ
+                                      </span>
+                                      <span className="font-semibold text-red-600 group-hover:translate-x-1 transition-transform flex items-center">
+                                        เปิดดูแฟ้ม →
+                                      </span>
+                                    </div>
+                                  </Link>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
             </div>
           )}
         </div>
       )}
 
       {/* ========================================================
-          MODAL 1: LIGHTBOX ดูรูปภาพขนาดเต็ม
+          MODAL 1: LIGHTBOX ดูรูปภาพตู้เอกสารขนาดเต็ม
           ======================================================== */}
       {previewImage && (
         <div 
@@ -1119,7 +1452,7 @@ function ArchiveContent() {
                       type="file" 
                       accept="image/*" 
                       capture="environment"
-                      onChange={handleFileChange}
+                      onChange={handleFileChange} 
                       className="hidden" 
                       disabled={isProcessing}
                     />
@@ -1182,6 +1515,7 @@ function ArchiveContent() {
           </div>
         </div>
       )}
+
       {/* ========================================================
           MODAL 3: บันทึกเรื่องเก่า / เอกสารย้อนหลังเข้าแฟ้ม
           ======================================================== */}
@@ -1350,7 +1684,7 @@ function ArchiveContent() {
                 />
               </div>
 
-              {/* ส่วนพับเก็บตัวเลือกเพิ่มเติม (ลดความเยอะ ไม่ต้องกรอกหลายช่องถ้าไม่จำเป็น) */}
+              {/* ส่วนพับเก็บตัวเลือกเพิ่มเติม */}
               <div className="pt-1">
                 <button
                   type="button"

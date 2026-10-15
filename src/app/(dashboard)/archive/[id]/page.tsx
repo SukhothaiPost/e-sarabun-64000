@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useMemo, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { 
@@ -21,6 +21,7 @@ import { ArchiveLocation, SarabanDocument, THAIPOST_ORGANIZATIONS } from "@/type
 import { formatToBuddhistEra } from "@/lib/dateUtils";
 import { 
   ArrowLeft, 
+  Archive,
   Folder, 
   Edit, 
   Trash2, 
@@ -37,6 +38,8 @@ import {
   Maximize2, 
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   SlidersHorizontal,
   Image as ImageIcon,
   Upload,
@@ -48,9 +51,25 @@ import {
   Link2,
   Eye,
   Layers,
-  FileDown
+  FileDown,
+  Search,
+  Filter
 } from "lucide-react";
 import { compressImage } from "@/lib/imageUtils";
+
+function normalizeCabinet(val: string): string {
+  if (!val) return "1";
+  return val.replace(/^ตู้\s*/i, "").trim() || val.trim();
+}
+
+function normalizeShelf(val: string): string {
+  if (!val) return "01";
+  const cleaned = val.replace(/^ชั้น\s*/i, "").trim();
+  if (!isNaN(Number(cleaned)) && cleaned) {
+    return cleaned.padStart(2, "0");
+  }
+  return cleaned;
+}
 
 export default function ArchiveDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -59,7 +78,13 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
 
   const [location, setLocation] = useState<ArchiveLocation | null>(null);
   const [documents, setDocuments] = useState<SarabanDocument[]>([]);
+  const [siblingFolders, setSiblingFolders] = useState<ArchiveLocation[]>([]);
+  const [structurePhoto, setStructurePhoto] = useState<string>("");
   const [loading, setLoading] = useState(true);
+
+  // Document Filter & Search States
+  const [docFilterType, setDocFilterType] = useState<"all" | "incoming" | "outgoing" | "historical">("all");
+  const [docSearchTerm, setDocSearchTerm] = useState("");
 
   // Modals state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -123,6 +148,29 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
           image_url: locData.image_url || "",
         });
 
+        // Fetch cabinet photo
+        const cabId = normalizeCabinet(locData.cabinet);
+        const cabPhotoRef = doc(db, "archive_structure_photos", `cabinet_${cabId}`);
+        const cabPhotoSnap = await getDoc(cabPhotoRef);
+        if (cabPhotoSnap.exists() && cabPhotoSnap.data()?.image_url) {
+          setStructurePhoto(cabPhotoSnap.data().image_url);
+        } else if (locData.image_url) {
+          setStructurePhoto(locData.image_url);
+        }
+
+        // Fetch sibling folders on the same shelf (or same cabinet) for quick navigation
+        const allLocsQuery = query(collection(db, "archive_locations"));
+        const allLocsSnap = await getDocs(allLocsQuery);
+        const siblings: ArchiveLocation[] = [];
+        allLocsSnap.forEach(d => {
+          const dData = d.data() as ArchiveLocation;
+          if (normalizeCabinet(dData.cabinet) === cabId && normalizeShelf(dData.shelf) === normalizeShelf(locData.shelf)) {
+            siblings.push(dData);
+          }
+        });
+        siblings.sort((a, b) => a.location_code.localeCompare(b.location_code));
+        setSiblingFolders(siblings);
+
         // Fetch documents archived in this location
         const docsQuery = query(
           collection(db, "documents"),
@@ -165,6 +213,40 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
     fetchArchiveDetail();
   }, [resolvedParams.id]);
 
+  // Sibling folder prev/next calculation
+  const currentFolderIndex = siblingFolders.findIndex(f => f.id === location?.id);
+  const prevFolder = currentFolderIndex > 0 ? siblingFolders[currentFolderIndex - 1] : null;
+  const nextFolder = currentFolderIndex >= 0 && currentFolderIndex < siblingFolders.length - 1 ? siblingFolders[currentFolderIndex + 1] : null;
+
+  // Filtered documents inside this folder
+  const filteredDocuments = useMemo(() => {
+    return documents.filter(doc => {
+      // Type filter
+      if (docFilterType === "incoming" && doc.document_type !== "incoming") return false;
+      if (docFilterType === "outgoing" && doc.document_type !== "outgoing") return false;
+      if (docFilterType === "historical" && !(doc.document_type === "historical" || doc.is_historical)) return false;
+
+      // Search term
+      if (docSearchTerm.trim()) {
+        const term = docSearchTerm.trim().toLowerCase();
+        const matches = 
+          doc.subject?.toLowerCase().includes(term) ||
+          doc.running_number?.toLowerCase().includes(term) ||
+          doc.document_number?.toLowerCase().includes(term) ||
+          doc.sender?.toLowerCase().includes(term) ||
+          doc.recipient?.toLowerCase().includes(term) ||
+          doc.notes?.toLowerCase().includes(term);
+        if (!matches) return false;
+      }
+      return true;
+    });
+  }, [documents, docFilterType, docSearchTerm]);
+
+  // Count by document types
+  const incomingCount = useMemo(() => documents.filter(d => d.document_type === "incoming").length, [documents]);
+  const outgoingCount = useMemo(() => documents.filter(d => d.document_type === "outgoing").length, [documents]);
+  const historicalCount = useMemo(() => documents.filter(d => d.document_type === "historical" || d.is_historical).length, [documents]);
+
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -187,7 +269,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
 
   const handleQuickDeletePhoto = async () => {
     if (!location) return;
-    if (!confirm("คุณต้องการลบรูปภาพตู้/ชั้นนี้ใช่หรือไม่?")) return;
+    if (!confirm("คุณต้องการลบรูปภาพตู้เอกสารนี้ใช่หรือไม่?")) return;
 
     try {
       const locRef = doc(db, "archive_locations", location.id);
@@ -196,6 +278,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
         updatedAt: serverTimestamp(),
       });
       setLocation({ ...location, image_url: "" });
+      setStructurePhoto("");
       setEditFormData(prev => ({ ...prev, image_url: "" }));
       setActionSuccess("ลบรูปภาพเรียบร้อยแล้ว");
       setTimeout(() => setActionSuccess(""), 4000);
@@ -308,7 +391,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
       const locRef = doc(db, "archive_locations", location.id);
       await deleteDoc(locRef);
 
-      router.push("/archive");
+      router.push(`/archive?cabinet=${encodeURIComponent(location.cabinet)}`);
     } catch (err: any) {
       console.error(err);
       setActionError("เกิดข้อผิดพลาดในการลบ: " + err.message);
@@ -608,225 +691,324 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
-  if (loading) return <div className="p-12 text-center text-gray-500">กำลังโหลดข้อมูลคลังเอกสาร...</div>;
-  if (!location) return <div className="p-12 text-center text-red-500">ไม่พบจุดจัดเก็บเอกสาร</div>;
+  if (loading) return (
+    <div className="p-16 text-center text-gray-500 bg-white rounded-2xl border border-gray-200">
+      <div className="h-8 w-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+      กำลังโหลดข้อมูลแฟ้มจัดเก็บ...
+    </div>
+  );
+
+  if (!location) return (
+    <div className="p-16 text-center text-red-600 bg-white rounded-2xl border border-gray-200">
+      <AlertTriangle className="w-10 h-10 mx-auto mb-2 text-red-500" />
+      <p className="text-base font-bold">ไม่พบจุดจัดเก็บเอกสาร</p>
+      <Link href="/archive" className="text-xs text-red-600 hover:underline mt-2 inline-block">
+        ← กลับไปหน้าคลังเอกสาร
+      </Link>
+    </div>
+  );
+
+  const displayPhoto = structurePhoto || location.image_url;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       {/* Toast Alert */}
       {actionSuccess && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-lg flex items-center space-x-2">
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl flex items-center space-x-2 shadow-xs animate-in fade-in">
           <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
           <span className="text-sm font-medium">{actionSuccess}</span>
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center space-x-4">
-          <Link 
-            href={`/archive?cabinet=${encodeURIComponent(location.cabinet)}&shelf=${encodeURIComponent(location.shelf)}`}
-            className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
-            title={`กลับไปที่ ตู้ ${location.cabinet} / ชั้น ${location.shelf}`}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <div className="flex items-center gap-1.5 text-xs text-red-700 font-medium mb-1">
-              <Link href={`/archive?cabinet=${encodeURIComponent(location.cabinet)}`} className="hover:underline">
-                🏛️ ตู้ {location.cabinet}
-              </Link>
-              <span>/</span>
-              <Link href={`/archive?cabinet=${encodeURIComponent(location.cabinet)}&shelf=${encodeURIComponent(location.shelf)}`} className="hover:underline">
-                🪜 ชั้น {location.shelf}
-              </Link>
-              <span>/</span>
-              <span className="font-bold text-gray-700">📁 แฟ้ม {location.folder}</span>
+      {/* Breadcrumb Navigation with 3-Level Physical Context */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-3 sm:p-4 shadow-2xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <nav className="flex items-center space-x-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-thin">
+            <Link 
+              href="/archive" 
+              className="flex items-center text-gray-500 hover:text-red-700 font-medium py-1 px-2 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
+            >
+              <Archive className="w-3.5 h-3.5 mr-1" />
+              คลังเอกสาร
+            </Link>
+            <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <Link 
+              href={`/archive?cabinet=${encodeURIComponent(location.cabinet)}`}
+              className="flex items-center text-gray-700 hover:text-red-700 font-semibold py-1 px-2 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
+            >
+              🏛️ ตู้ {location.cabinet}
+            </Link>
+            <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <Link 
+              href={`/archive?cabinet=${encodeURIComponent(location.cabinet)}&shelf=${encodeURIComponent(location.shelf)}`}
+              className="flex items-center text-gray-700 hover:text-red-700 font-semibold py-1 px-2 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
+            >
+              🪜 ชั้น {location.shelf}
+            </Link>
+            <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <span className="font-bold text-red-700 bg-red-50 py-1 px-2.5 rounded-lg border border-red-200 shrink-0">
+              📁 แฟ้ม {location.folder}
+            </span>
+          </nav>
+
+          {/* Sibling Folder Quick Switcher (Prev / Next Folder on this shelf) */}
+          {siblingFolders.length > 1 && (
+            <div className="flex items-center space-x-2 shrink-0 self-end sm:self-center">
+              {prevFolder ? (
+                <Link
+                  href={`/archive/${prevFolder.id}`}
+                  className="flex items-center px-2.5 py-1 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-medium transition-colors"
+                  title={`แฟ้มก่อนหน้า: ${prevFolder.folder_name || prevFolder.sequence}`}
+                >
+                  <ChevronLeft className="w-3.5 h-3.5 mr-0.5" />
+                  แฟ้มก่อนหน้า ({prevFolder.folder})
+                </Link>
+              ) : (
+                <span className="px-2.5 py-1 text-gray-300 text-xs select-none">
+                  (แฟ้มแรกสุด)
+                </span>
+              )}
+
+              <span className="text-gray-300">|</span>
+
+              {nextFolder ? (
+                <Link
+                  href={`/archive/${nextFolder.id}`}
+                  className="flex items-center px-2.5 py-1 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-medium transition-colors"
+                  title={`แฟ้มถัดไป: ${nextFolder.folder_name || nextFolder.sequence}`}
+                >
+                  แฟ้มถัดไป ({nextFolder.folder})
+                  <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+                </Link>
+              ) : (
+                <span className="px-2.5 py-1 text-gray-300 text-xs select-none">
+                  (แฟ้มสุดท้าย)
+                </span>
+              )}
             </div>
-            <div className="flex items-center space-x-3">
-              <h1 className="text-2xl font-bold text-gray-900">
-                {location.folder_name || location.sequence || "แฟ้มเอกสาร"}
-              </h1>
-              <span className="px-3 py-1 bg-red-50 text-red-700 font-mono font-bold text-sm rounded-lg border border-red-200">
+          )}
+        </div>
+      </div>
+
+      {/* Main Folder Title & Physical Location Card */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-5">
+          <div className="space-y-2 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-3 py-1 bg-red-600 text-white font-mono font-bold text-xs rounded-lg shadow-2xs">
                 {location.location_code}
               </span>
+              <span className="text-xs font-semibold px-2.5 py-1 bg-gray-100 text-gray-700 rounded-lg">
+                เลขที่แฟ้ม {location.folder}
+              </span>
+              <span className="text-xs font-semibold px-2.5 py-1 bg-red-50 text-red-700 rounded-lg border border-red-200">
+                หมวด: {location.category}
+              </span>
             </div>
-            <p className="text-sm text-gray-500 mt-1">
-              ตู้: {location.cabinet} • ชั้น: {location.shelf} • หมวดหมู่: {location.category} • เลขที่แฟ้ม: {location.folder}
+
+            <h1 className="text-2xl font-bold text-gray-900 leading-tight">
+              {location.folder_name || location.sequence || "แฟ้มเอกสาร"}
+            </h1>
+
+            <p className="text-xs text-gray-500">
+              ตำแหน่งจริง: <strong>ตู้ {location.cabinet}</strong> ➔ <strong>ชั้นวาง {location.shelf}</strong> ➔ <strong>แฟ้ม {location.folder}</strong>
             </p>
           </div>
-        </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center space-x-2">
-          {appUser?.role !== 'viewer' && (
-            <>
-              <button 
-                onClick={() => setIsEditModalOpen(true)}
-                className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
-              >
-                <Edit className="w-4 h-4 mr-2 text-red-600" />
-                แก้ไขข้อมูลแฟ้ม
-              </button>
-              <button 
-                onClick={() => setIsDeleteModalOpen(true)}
-                className="flex items-center px-4 py-2 bg-red-50 border border-red-200 rounded-lg text-sm font-medium text-red-600 hover:bg-red-100 shadow-sm transition-colors"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                ลบแฟ้มจัดเก็บ
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-          <span className="text-xs font-semibold text-gray-500 uppercase">ตำแหน่งตู้และชั้น</span>
-          <p className="text-base font-bold text-gray-900 mt-1">{location.cabinet} / {location.shelf}</p>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-          <span className="text-xs font-semibold text-gray-500 uppercase">หมวดหมู่/งาน</span>
-          <p className="text-base font-bold text-gray-900 mt-1">{location.category || '-'}</p>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-          <span className="text-xs font-semibold text-gray-500 uppercase">เลขที่แฟ้ม</span>
-          <p className="text-base font-bold text-red-700 mt-1">{location.folder}</p>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-          <span className="text-xs font-semibold text-gray-500 uppercase">เอกสารในแฟ้มนี้</span>
-          <p className="text-base font-bold text-gray-900 mt-1">{documents.length} ฉบับ</p>
-        </div>
-      </div>
-
-      {/* Cabinet Photo Card */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4 pb-2 border-b">
-          <div className="flex items-center space-x-2">
-            <Camera className="w-5 h-5 text-red-600" />
-            <h2 className="text-base font-bold text-gray-900">รูปภาพตู้เอกสารจัดเก็บ</h2>
-          </div>
-          {location.image_url && (
-            <div className="flex items-center space-x-2">
-              <button 
-                onClick={() => setIsLightboxOpen(true)}
-                className="flex items-center text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors border border-red-200"
-              >
-                <Maximize2 className="w-3.5 h-3.5 mr-1.5" />
-                กดดูรูปขนาดเต็ม
-              </button>
-              {appUser?.role !== 'viewer' && (
-                <button 
-                  onClick={handleQuickDeletePhoto}
-                  className="text-xs font-medium text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded-lg transition-colors border border-red-200"
-                >
-                  ลบรูปภาพ
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {location.image_url ? (
-          <div className="flex flex-col sm:flex-row items-start gap-6">
-            <div 
-              className="relative group cursor-pointer overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-gray-50 max-w-md w-full sm:w-80 shrink-0" 
-              onClick={() => setIsLightboxOpen(true)}
-            >
-              <img 
-                src={location.image_url} 
-                alt={`รูปภาพตู้ ${location.cabinet}`}
-                className="w-full h-56 object-cover group-hover:scale-105 transition-transform duration-300" 
-              />
-              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-medium text-xs backdrop-blur-[2px]">
-                <Maximize2 className="w-4 h-4 mr-1.5" />
-                คลิกเพื่อดูรูปภาพขนาดใหญ่
-              </div>
-              <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-sm text-white px-2 py-0.5 rounded text-[11px] font-mono">
-                ตู้ {location.cabinet}
-              </div>
-            </div>
-
-            <div className="space-y-3 flex-1">
-              <div>
-                <h3 className="text-sm font-bold text-gray-900">ตำแหน่งทางกายภาพ</h3>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  ตู้เอกสารหมายเลข <strong>{location.cabinet}</strong> • ชั้นวาง <strong>{location.shelf}</strong>
-                </p>
-                <p className="text-xs font-mono text-red-700 bg-red-50 inline-block px-2 py-0.5 rounded border border-red-200 mt-1">
-                  รหัสสถานที่: {location.location_code}
-                </p>
-              </div>
-
-              <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100 space-y-1">
-                <p className="font-semibold text-gray-700">💡 คำแนะนำการค้นหา:</p>
-                <p>คลิกที่รูปภาพเพื่อเปิดดูภาพขยายความละเอียดสูง ช่วยให้เจ้าหน้าที่มองเห็นตู้เอกสารจริงได้อย่างรวดเร็ว (ชั้นและแฟ้มไม่มีรูปถ่าย)</p>
-              </div>
-
-              {appUser?.role !== 'viewer' && (
+          {/* Action Buttons */}
+          <div className="flex items-center space-x-2 shrink-0">
+            {appUser?.role !== 'viewer' && (
+              <>
                 <button 
                   onClick={() => setIsEditModalOpen(true)}
-                  className="inline-flex items-center text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-lg shadow-xs transition-colors"
+                  className="flex items-center px-3.5 py-2 bg-white border border-gray-300 rounded-xl text-xs font-semibold text-gray-700 hover:bg-gray-50 shadow-2xs transition-colors"
                 >
                   <Edit className="w-3.5 h-3.5 mr-1.5 text-red-600" />
-                  เปลี่ยนรูปภาพตู้เอกสาร
+                  แก้ไขแฟ้ม
                 </button>
-              )}
+                <button 
+                  onClick={() => setIsDeleteModalOpen(true)}
+                  className="flex items-center px-3.5 py-2 bg-red-50 border border-red-200 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-100 shadow-2xs transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                  ลบแฟ้ม
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Physical Details & Cabinet Photo Section */}
+        <div className="mt-6 pt-5 border-t border-gray-100 grid grid-cols-1 md:grid-cols-3 gap-5 items-center">
+          {/* Physical Location Stats */}
+          <div className="md:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-gray-50/80 p-3.5 rounded-xl border border-gray-100">
+              <span className="text-[11px] font-semibold text-gray-400 uppercase block">ตู้เอกสาร</span>
+              <p className="text-base font-bold text-gray-900 mt-0.5">ตู้ {location.cabinet}</p>
+            </div>
+            <div className="bg-gray-50/80 p-3.5 rounded-xl border border-gray-100">
+              <span className="text-[11px] font-semibold text-gray-400 uppercase block">ชั้นวาง</span>
+              <p className="text-base font-bold text-gray-900 mt-0.5">ชั้น {location.shelf}</p>
+            </div>
+            <div className="bg-gray-50/80 p-3.5 rounded-xl border border-gray-100">
+              <span className="text-[11px] font-semibold text-gray-400 uppercase block">เลขที่แฟ้ม</span>
+              <p className="text-base font-bold text-red-700 mt-0.5">{location.folder}</p>
+            </div>
+            <div className="bg-gray-50/80 p-3.5 rounded-xl border border-gray-100">
+              <span className="text-[11px] font-semibold text-gray-400 uppercase block">เอกสารในแฟ้ม</span>
+              <p className="text-base font-bold text-gray-900 mt-0.5">{documents.length} ฉบับ</p>
             </div>
           </div>
-        ) : (
-          <div className="p-8 text-center bg-gray-50/70 border border-dashed border-gray-300 rounded-xl">
-            <Camera className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm font-medium text-gray-700">ยังไม่มีรูปภาพตู้เอกสารนี้</p>
-            <p className="text-xs text-gray-400 mt-1 mb-4">
-              เพิ่มรูปถ่ายตู้เอกสารจริง เพื่อให้เจ้าหน้าที่สังเกตตำแหน่งตู้ได้รวดเร็ว
-            </p>
-            {appUser?.role !== 'viewer' && (
-              <button 
-                onClick={() => setIsEditModalOpen(true)}
-                className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-md shadow-red-200 transition-colors"
+
+          {/* Cabinet Photo Thumbnail */}
+          <div className="bg-gray-50/80 p-3 rounded-xl border border-gray-200 flex items-center justify-between gap-3">
+            <div className="flex items-center space-x-3 min-w-0">
+              {displayPhoto ? (
+                <div 
+                  className="w-14 h-14 rounded-lg overflow-hidden border border-gray-300 shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+                  onClick={() => setIsLightboxOpen(true)}
+                >
+                  <img 
+                    src={displayPhoto} 
+                    alt={`รูปตู้ ${location.cabinet}`} 
+                    className="w-full h-full object-cover" 
+                  />
+                </div>
+              ) : (
+                <div className="w-14 h-14 rounded-lg bg-gray-200 flex items-center justify-center text-gray-400 shrink-0">
+                  <Archive className="w-6 h-6 text-gray-400" />
+                </div>
+              )}
+              <div className="min-w-0">
+                <span className="text-xs font-bold text-gray-900 block truncate">
+                  รูปถ่าย ตู้ {location.cabinet}
+                </span>
+                <span className="text-[11px] text-gray-500 block">
+                  {displayPhoto ? "มีรูปถ่ายตู้จริง" : "ยังไม่มีรูปถ่ายตู้"}
+                </span>
+              </div>
+            </div>
+
+            {displayPhoto && (
+              <button
+                type="button"
+                onClick={() => setIsLightboxOpen(true)}
+                className="text-xs text-red-700 hover:text-red-900 font-semibold bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded-lg border border-red-200 shrink-0 transition-colors"
               >
-                <Camera className="w-4 h-4 mr-1.5" />
-                ถ่ายรูป / เพิ่มรูปภาพตู้เอกสาร
+                ดูรูปตู้
               </button>
             )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Document List In This Archive */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-200 bg-gray-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center space-x-2">
-            <FileText className="w-5 h-5 text-red-600" />
-            <h2 className="text-base font-bold text-gray-900">
-              รายการเอกสารที่จัดเก็บในแฟ้มนี้ ({documents.length} ฉบับ)
-            </h2>
+      <div className="bg-white rounded-2xl shadow-xs border border-gray-200 overflow-hidden">
+        {/* Header Toolbar */}
+        <div className="p-4 border-b border-gray-200 bg-gray-50/70 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center space-x-2">
+              <FileText className="w-5 h-5 text-red-600" />
+              <h2 className="text-base font-bold text-gray-900">
+                เอกสารที่จัดเก็บในแฟ้มนี้ ({documents.length} ฉบับ)
+              </h2>
+            </div>
+            {appUser?.role !== 'viewer' && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleOpenAttachModal}
+                  className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-xl text-xs font-medium text-gray-700 hover:bg-white bg-white/70 shadow-2xs transition-colors"
+                  title="ดึงเอกสารในระบบที่ยังไม่ได้จัดเก็บเข้าแฟ้มนี้"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1 text-red-600" />
+                  ดึงเอกสารในระบบเข้าแฟ้ม
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenHistoricalModal()}
+                  className="inline-flex items-center px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors"
+                >
+                  <History className="w-3.5 h-3.5 mr-1" />
+                  + บันทึกเรื่องเก่าย้อนหลัง
+                </button>
+              </div>
+            )}
           </div>
-          {appUser?.role !== 'viewer' && (
-            <div className="flex items-center gap-2">
+
+          {/* Filter Pills & In-Folder Search */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-thin text-xs">
               <button
                 type="button"
-                onClick={handleOpenAttachModal}
-                className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-white bg-white/60 shadow-xs transition-colors"
-                title="ดึงเอกสารในระบบที่ยังไม่ได้จัดเก็บเข้าแฟ้มนี้"
+                onClick={() => setDocFilterType("all")}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all shrink-0 ${
+                  docFilterType === "all"
+                    ? "bg-red-600 text-white shadow-2xs"
+                    : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                }`}
               >
-                <Plus className="w-3.5 h-3.5 mr-1" />
-                ดึงเอกสารในระบบเข้าแฟ้ม
+                ทั้งหมด ({documents.length})
               </button>
               <button
                 type="button"
-                onClick={() => handleOpenHistoricalModal()}
-                className="inline-flex items-center px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-md shadow-red-200 transition-colors"
+                onClick={() => setDocFilterType("incoming")}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all shrink-0 ${
+                  docFilterType === "incoming"
+                    ? "bg-blue-600 text-white shadow-2xs"
+                    : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                }`}
               >
-                <History className="w-3.5 h-3.5 mr-1.5" />
-                + บันทึกเรื่องเก่าย้อนหลัง
+                หนังสือรับ ({incomingCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setDocFilterType("outgoing")}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all shrink-0 ${
+                  docFilterType === "outgoing"
+                    ? "bg-emerald-600 text-white shadow-2xs"
+                    : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                }`}
+              >
+                หนังสือส่ง ({outgoingCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setDocFilterType("historical")}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all shrink-0 ${
+                  docFilterType === "historical"
+                    ? "bg-amber-600 text-white shadow-2xs"
+                    : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                }`}
+              >
+                เรื่องเก่าย้อนหลัง ({historicalCount})
               </button>
             </div>
-          )}
+
+            {/* Quick in-folder search */}
+            <div className="relative w-full sm:w-64">
+              <Search className="h-3.5 w-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="ค้นหาในแฟ้มนี้..."
+                value={docSearchTerm}
+                onChange={(e) => setDocSearchTerm(e.target.value)}
+                className="w-full pl-8 pr-7 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:ring-1 focus:ring-red-500"
+              />
+              {docSearchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setDocSearchTerm("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
+        {/* Documents Table */}
         {documents.length === 0 ? (
           <div className="p-12 text-center text-gray-500">
             <Folder className="h-12 w-12 text-gray-300 mx-auto mb-3" />
@@ -839,7 +1021,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                 <button
                   type="button"
                   onClick={() => handleOpenHistoricalModal()}
-                  className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-md shadow-red-200 transition-colors"
+                  className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors"
                 >
                   <History className="w-4 h-4 mr-1.5" />
                   + บันทึกเรื่องเก่าย้อนหลังเข้าแฟ้มนี้
@@ -847,51 +1029,55 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                 <button
                   type="button"
                   onClick={handleOpenAttachModal}
-                  className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-semibold shadow-xs transition-colors"
+                  className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-semibold shadow-2xs transition-colors"
                 >
-                  <Plus className="w-4 h-4 mr-1.5" />
+                  <Plus className="w-4 h-4 mr-1.5 text-red-600" />
                   ดึงเอกสารในระบบเข้าแฟ้ม
                 </button>
               </div>
             )}
           </div>
+        ) : filteredDocuments.length === 0 ? (
+          <div className="p-12 text-center text-gray-400">
+            ไม่พบเอกสารตรงตามเงื่อนไขการค้นหาหรือตัวกรองที่เลือก
+          </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-gray-200 text-left text-xs">
+              <thead className="bg-gray-50 text-gray-600 font-semibold">
                 <tr>
-                  <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ประเภท</th>
-                  <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เลขที่หนังสือ / ทะเบียน</th>
-                  <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">วันที่</th>
-                  <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เรื่อง</th>
-                  <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จาก / เรียน</th>
-                  <th scope="col" className="px-5 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">การจัดการ</th>
+                  <th scope="col" className="px-4 py-3">ประเภท</th>
+                  <th scope="col" className="px-4 py-3">เลขที่หนังสือ / ทะเบียน</th>
+                  <th scope="col" className="px-4 py-3">วันที่</th>
+                  <th scope="col" className="px-4 py-3">เรื่อง / ชื่อเอกสาร</th>
+                  <th scope="col" className="px-4 py-3">จาก / เรียน</th>
+                  <th scope="col" className="px-4 py-3 text-right">การจัดการ</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {documents.map((doc) => {
+              <tbody className="bg-white divide-y divide-gray-100">
+                {filteredDocuments.map((doc) => {
                   const isHist = doc.document_type === 'historical' || doc.is_historical;
                   return (
                     <tr key={doc.id} className="hover:bg-red-50/20 transition-colors">
-                      <td className="px-5 py-3.5 whitespace-nowrap text-sm">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         {isHist ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
                             <History className="w-3 h-3 mr-1 text-amber-600" />
                             {doc.historical_type || "เรื่องเก่าย้อนหลัง"}
                           </span>
                         ) : doc.document_type === 'incoming' ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
                             <Inbox className="w-3 h-3 mr-1" />
                             หนังสือรับ
                           </span>
                         ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                             <Send className="w-3 h-3 mr-1" />
                             หนังสือส่ง
                           </span>
                         )}
                       </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap text-sm font-bold font-mono">
+                      <td className="px-4 py-3 whitespace-nowrap font-bold font-mono">
                         {isHist ? (
                           <button
                             type="button"
@@ -906,12 +1092,12 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                           </Link>
                         )}
                       </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap text-xs text-gray-500">
+                      <td className="px-4 py-3 whitespace-nowrap text-gray-500">
                         {formatToBuddhistEra(doc.document_date || doc.sent_date || doc.received_date)}
                       </td>
-                      <td className="px-5 py-3.5 text-sm text-gray-900 max-w-xs">
+                      <td className="px-4 py-3 max-w-xs">
                         <div className="flex flex-col">
-                          <span className="font-semibold text-gray-800 truncate" title={doc.subject}>
+                          <span className="font-semibold text-gray-900 truncate" title={doc.subject}>
                             {doc.subject}
                           </span>
                           {(doc.google_drive_link || doc.drive_links?.[0]?.url) && (
@@ -927,7 +1113,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                           )}
                         </div>
                       </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap text-xs text-gray-600">
+                      <td className="px-4 py-3 whitespace-nowrap text-gray-600">
                         {isHist ? (
                           <span>
                             {doc.sender && doc.sender !== "-" ? `จาก: ${doc.sender}` : ""} 
@@ -938,7 +1124,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                           doc.document_type === 'incoming' ? doc.sender : doc.recipient
                         )}
                       </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap text-right text-xs font-medium space-x-2">
+                      <td className="px-4 py-3 whitespace-nowrap text-right space-x-2">
                         {isHist ? (
                           <>
                             <button 
@@ -996,12 +1182,14 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
         )}
       </div>
 
-      {/* MODAL: แก้ไขข้อมูลแฟ้มจัดเก็บ */}
+      {/* ========================================================
+          MODAL: แก้ไขข้อมูลแฟ้มจัดเก็บ
+          ======================================================== */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-4 border-b">
-              <h3 className="text-lg font-bold text-gray-900 flex items-center">
+              <h3 className="text-base font-bold text-gray-900 flex items-center">
                 <Edit className="w-5 h-5 mr-2 text-red-600" />
                 แก้ไขข้อมูลแฟ้มจัดเก็บ
               </h3>
@@ -1014,7 +1202,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
             </div>
 
             {actionError && (
-              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
                 {actionError}
               </div>
             )}
@@ -1022,7 +1210,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
             <form onSubmit={handleEditSubmit} className="mt-4 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">ตู้ (Cabinet)</label>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">ตู้ (Cabinet)</label>
                   <input 
                     type="text" 
                     value={editFormData.cabinet}
@@ -1032,7 +1220,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">ชั้น (Shelf)</label>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">ชั้น (Shelf)</label>
                   <input 
                     type="text" 
                     value={editFormData.shelf}
@@ -1044,7 +1232,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">หมวดหมู่/งาน (Category)</label>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">หมวดหมู่/งาน (Category)</label>
                 <input 
                   type="text" 
                   value={editFormData.category}
@@ -1052,12 +1240,11 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                   className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
                   placeholder="เช่น งานสารบรรณ, การเงิน, บุคคล"
                 />
-                <p className="text-[11px] text-gray-500 mt-0.5">* แสดง Fulltext เต็มตามชื่อหมวดหมู่ในรหัสสถานที่</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">เลขที่แฟ้ม (Folder No.) <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">เลขที่แฟ้ม (Folder No.) <span className="text-red-500">*</span></label>
                   <input 
                     type="text" 
                     required
@@ -1068,7 +1255,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">ชื่อแฟ้ม (Folder Name) <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">ชื่อแฟ้ม (Folder Name) <span className="text-red-500">*</span></label>
                   <input 
                     type="text" 
                     required
@@ -1078,68 +1265,6 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                     placeholder="เช่น แฟ้มหนังสือส่ง, คำสั่งแต่งตั้ง"
                   />
                 </div>
-              </div>
-
-              {/* Photo Upload in Edit Modal */}
-              <div className="border border-dashed border-gray-300 rounded-xl p-3 bg-gray-50/60">
-                <label className="block text-xs font-semibold text-gray-800 mb-1 flex items-center">
-                  <Camera className="w-3.5 h-3.5 mr-1.5 text-red-600" />
-                  รูปภาพตู้เอกสารจัดเก็บ
-                </label>
-
-                {editFormData.image_url ? (
-                  <div className="relative rounded-lg overflow-hidden border border-gray-200 bg-white max-w-xs mt-2">
-                    <img 
-                      src={editFormData.image_url} 
-                      alt="รูปภาพตู้เอกสาร" 
-                      className="w-full h-36 object-cover rounded-lg"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleRemoveImage}
-                      className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white p-1 rounded-full shadow-md transition-colors"
-                      title="ลบรูปภาพ"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-2 mt-2">
-                    <label className="flex items-center justify-center border border-dashed border-red-300 hover:border-red-500 bg-red-50/40 hover:bg-red-50/80 rounded-lg p-3 cursor-pointer transition-colors group">
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        capture="environment"
-                        onChange={handleImageFileChange} 
-                        className="hidden" 
-                        disabled={isProcessingImage}
-                      />
-                      <div className="flex items-center space-x-2 text-red-700 font-medium text-xs">
-                        {isProcessingImage ? (
-                          <>
-                            <div className="h-3.5 w-3.5 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
-                            <span>กำลังประมวลผลรูป...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Camera className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                            <span>ถ่ายรูป / อัปโหลดรูปตู้เอกสาร</span>
-                          </>
-                        )}
-                      </div>
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-gray-400">หรือ URL:</span>
-                      <input 
-                        type="url" 
-                        value={editFormData.image_url} 
-                        onChange={(e) => setEditFormData({ ...editFormData, image_url: e.target.value })} 
-                        placeholder="https://..."
-                        className="flex-1 px-2.5 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div className="bg-red-50 p-2.5 rounded-lg border border-red-200 mt-2">
@@ -1171,7 +1296,9 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      {/* MODAL: ยืนยันการลบแฟ้มจัดเก็บ */}
+      {/* ========================================================
+          MODAL: ยืนยันการลบแฟ้มจัดเก็บ
+          ======================================================== */}
       {isDeleteModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-200">
@@ -1219,14 +1346,15 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      {/* LIGHTBOX MODAL: ดูรูปภาพตู้เอกสารขนาดเต็ม */}
-      {isLightboxOpen && location?.image_url && (
+      {/* ========================================================
+          LIGHTBOX MODAL: ดูรูปภาพตู้เอกสารขนาดเต็ม
+          ======================================================== */}
+      {isLightboxOpen && displayPhoto && (
         <div 
           className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-200"
           onClick={() => setIsLightboxOpen(false)}
         >
           <div className="relative max-w-4xl w-full flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
-            {/* Top Close Button & Title */}
             <div className="flex items-center justify-between w-full text-white mb-3 px-2">
               <div>
                 <h3 className="text-base font-bold">
@@ -1245,11 +1373,10 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
               </button>
             </div>
 
-            {/* High-res image display */}
             <div className="bg-black/40 rounded-2xl overflow-hidden max-h-[80vh] flex items-center justify-center border border-white/20 shadow-2xl">
               <img 
-                src={location.image_url} 
-                alt={`ตู้ ${location.cabinet} ชั้น ${location.shelf}`}
+                src={displayPhoto} 
+                alt={`ตู้ ${location.cabinet}`}
                 className="max-h-[78vh] max-w-full object-contain rounded-xl"
               />
             </div>
@@ -1260,8 +1387,9 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
       )}
+
       {/* ========================================================
-          MODAL 3: บันทึก / แก้ไขเรื่องเก่า / เอกสารย้อนหลัง
+          MODAL: บันทึก / แก้ไขเรื่องเก่า / เอกสารย้อนหลัง
           ======================================================== */}
       {isHistoricalModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 flex items-center justify-center p-4">
@@ -1420,7 +1548,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                 />
               </div>
 
-              {/* ส่วนพับเก็บตัวเลือกเพิ่มเติม (ลดความเยอะ ไม่ต้องกรอกหลายช่องถ้าไม่จำเป็น) */}
+              {/* ส่วนพับเก็บตัวเลือกเพิ่มเติม */}
               <div className="pt-1">
                 <button
                   type="button"
@@ -1522,7 +1650,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
       )}
 
       {/* ========================================================
-          MODAL 4: ดูข้อมูลเรื่องเก่า / เอกสารย้อนหลัง
+          MODAL: ดูข้อมูลเรื่องเก่า / เอกสารย้อนหลัง
           ======================================================== */}
       {viewingHistoricalDoc && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 flex items-center justify-center p-4">
@@ -1661,7 +1789,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
       )}
 
       {/* ========================================================
-          MODAL 5: ดึงเอกสารในระบบเข้าแฟ้มนี้
+          MODAL: ดึงเอกสารในระบบเข้าแฟ้มนี้
           ======================================================== */}
       {isAttachModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 flex items-center justify-center p-4">
