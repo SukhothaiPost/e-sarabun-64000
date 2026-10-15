@@ -3,6 +3,24 @@ export type DocumentType = 'incoming' | 'outgoing' | 'internal' | 'historical';
 export type Urgency = 'ปกติ' | 'ด่วน' | 'ด่วนมาก' | 'ด่วนที่สุด';
 export type DocumentStatus = 'registered' | 'assigned' | 'in_progress' | 'completed' | 'archived' | 'closed';
 
+export const THAIPOST_ORGANIZATIONS = [
+  "ปข.6",
+  "ปจ.สุโขทัย",
+  "ปณ.สวรรคโลก",
+  "ปณ.ศรีสำโรง",
+  "ปณ.ศรีสัชนาลัย",
+  "ปณ.บ้านด่านลานหอย",
+  "ปณ.ทุ่งเสลี่ยม",
+  "ปณ.คีรีมาศ",
+  "ปณ.กงไกรลาศ",
+  "ปณ.ศรีนคร",
+  "ปณ.ท่าชัย",
+  "ปณ.เมืองเก่า",
+  "ปณ.บ้านสวน",
+  "ปณ.บ้านใหม่ไชยมงคล",
+  "อื่นๆ (ระบุเอง)"
+] as const;
+
 export interface User {
   id: string;
   email: string;

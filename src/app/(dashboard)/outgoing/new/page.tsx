@@ -11,6 +11,7 @@ import Link from "next/link";
 
 const RECIPIENT_ORGANIZATIONS = [
   "ปข.6",
+  "ปจ.สุโขทัย",
   "ปณ.สวรรคโลก",
   "ปณ.ศรีสำโรง",
   "ปณ.ศรีสัชนาลัย",

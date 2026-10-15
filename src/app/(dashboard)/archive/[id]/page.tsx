@@ -17,7 +17,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/lib/contexts/AuthContext";
-import { ArchiveLocation, SarabanDocument } from "@/types";
+import { ArchiveLocation, SarabanDocument, THAIPOST_ORGANIZATIONS } from "@/types";
 import { formatToBuddhistEra } from "@/lib/dateUtils";
 import { 
   ArrowLeft, 
@@ -34,7 +34,10 @@ import {
   X,
   Plus,
   Camera,
-  Maximize2,
+  Maximize2, 
+  ChevronDown,
+  ChevronUp,
+  SlidersHorizontal,
   Image as ImageIcon,
   Upload,
   History,
@@ -71,14 +74,17 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
   const [isHistoricalModalOpen, setIsHistoricalModalOpen] = useState(false);
   const [editingHistoricalId, setEditingHistoricalId] = useState<string | null>(null);
   const [viewingHistoricalDoc, setViewingHistoricalDoc] = useState<SarabanDocument | null>(null);
+  const [senderOption, setSenderOption] = useState("");
+  const [customSender, setCustomSender] = useState("");
+  const [recipientOption, setRecipientOption] = useState("");
+  const [customRecipient, setCustomRecipient] = useState("");
+  const [showMoreHistFields, setShowMoreHistFields] = useState(false);
   const [historicalForm, setHistoricalForm] = useState({
     subject: "",
     historical_type: "หนังสือรับ (ย้อนหลัง)",
     document_number: "",
     document_date: new Date().toISOString().split("T")[0],
     historical_year: String(new Date().getFullYear() + 543 - 1),
-    sender: "",
-    recipient: "",
     google_drive_link: "",
     page_count: "1",
     notes: "",
@@ -348,29 +354,62 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
           dateStr = d.toISOString().split("T")[0];
         }
       }
+
+      const knownSender = THAIPOST_ORGANIZATIONS.find(org => org !== "อื่นๆ (ระบุเอง)" && org === docToEdit.sender);
+      if (knownSender) {
+        setSenderOption(knownSender);
+        setCustomSender("");
+      } else if (docToEdit.sender && docToEdit.sender !== "-") {
+        setSenderOption("อื่นๆ (ระบุเอง)");
+        setCustomSender(docToEdit.sender);
+      } else {
+        setSenderOption("");
+        setCustomSender("");
+      }
+
+      const knownRecipient = THAIPOST_ORGANIZATIONS.find(org => org !== "อื่นๆ (ระบุเอง)" && org === docToEdit.recipient);
+      if (knownRecipient) {
+        setRecipientOption(knownRecipient);
+        setCustomRecipient("");
+      } else if (docToEdit.recipient && docToEdit.recipient !== "-") {
+        setRecipientOption("อื่นๆ (ระบุเอง)");
+        setCustomRecipient(docToEdit.recipient);
+      } else {
+        setRecipientOption("");
+        setCustomRecipient("");
+      }
+
+      if (docToEdit.notes || (docToEdit.page_count && docToEdit.page_count !== "1")) {
+        setShowMoreHistFields(true);
+      } else {
+        setShowMoreHistFields(false);
+      }
+
       setHistoricalForm({
         subject: docToEdit.subject || "",
         historical_type: docToEdit.historical_type || "หนังสือรับ (ย้อนหลัง)",
         document_number: docToEdit.document_number || docToEdit.running_number || "",
         document_date: dateStr,
         historical_year: docToEdit.historical_year || String(new Date(dateStr).getFullYear() + 543),
-        sender: docToEdit.sender || "",
-        recipient: docToEdit.recipient || "",
         google_drive_link: docToEdit.google_drive_link || docToEdit.drive_links?.[0]?.url || "",
         page_count: docToEdit.page_count || "1",
         notes: docToEdit.notes || "",
       });
     } else {
       setEditingHistoricalId(null);
+      const todayStr = new Date().toISOString().split("T")[0];
       const defaultYear = String(new Date().getFullYear() + 543 - 1);
+      setSenderOption("");
+      setCustomSender("");
+      setRecipientOption("");
+      setCustomRecipient("");
+      setShowMoreHistFields(false);
       setHistoricalForm({
         subject: "",
         historical_type: "หนังสือรับ (ย้อนหลัง)",
         document_number: "",
-        document_date: new Date().toISOString().split("T")[0],
+        document_date: todayStr,
         historical_year: defaultYear,
-        sender: "",
-        recipient: "",
         google_drive_link: "",
         page_count: "1",
         notes: "",
@@ -385,6 +424,20 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
     if (!historicalForm.subject.trim()) {
       setActionError("กรุณาระบุเรื่อง / ชื่อเอกสาร");
       return;
+    }
+
+    let finalSender = "-";
+    if (senderOption === "อื่นๆ (ระบุเอง)") {
+      finalSender = customSender.trim() || "-";
+    } else if (senderOption) {
+      finalSender = senderOption;
+    }
+
+    let finalRecipient = "-";
+    if (recipientOption === "อื่นๆ (ระบุเอง)") {
+      finalRecipient = customRecipient.trim() || "-";
+    } else if (recipientOption) {
+      finalRecipient = recipientOption;
     }
 
     setIsSubmitting(true);
@@ -409,8 +462,8 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
           document_number: historicalForm.document_number.trim(),
           document_date: docDate,
           historical_year: historicalForm.historical_year.trim(),
-          sender: historicalForm.sender.trim(),
-          recipient: historicalForm.recipient.trim(),
+          sender: finalSender,
+          recipient: finalRecipient,
           google_drive_link: historicalForm.google_drive_link.trim(),
           drive_links: driveLinks,
           page_count: historicalForm.page_count.trim(),
@@ -434,8 +487,8 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
           document_number: historicalForm.document_number.trim(),
           document_date: docDate,
           subject: historicalForm.subject.trim(),
-          sender: historicalForm.sender.trim() || "-",
-          recipient: historicalForm.recipient.trim() || "-",
+          sender: finalSender,
+          recipient: finalRecipient,
           department: location.category || "งานสารบรรณ",
           urgency: "ปกติ",
           confidentiality: "ปกติ",
@@ -1245,6 +1298,7 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
             )}
 
             <form onSubmit={handleSaveHistoricalDoc} className="mt-4 space-y-3.5">
+              {/* เรื่อง / ชื่อเอกสาร */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
                   เรื่อง / ชื่อเอกสาร <span className="text-red-500">*</span>
@@ -1259,40 +1313,64 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                 />
               </div>
 
+              {/* ผู้ส่ง & ผู้รับ (Drop down list + อื่นๆ ระบุเอง) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    ประเภทเอกสารย้อนหลัง
+                    จาก (หน่วยงานผู้ส่ง / ต้นเรื่อง)
                   </label>
                   <select
-                    value={historicalForm.historical_type}
-                    onChange={(e) => setHistoricalForm({ ...historicalForm, historical_type: e.target.value })}
+                    value={senderOption}
+                    onChange={(e) => setSenderOption(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
                   >
-                    <option value="หนังสือรับ (ย้อนหลัง)">หนังสือรับ (ย้อนหลัง)</option>
-                    <option value="หนังสือส่ง (ย้อนหลัง)">หนังสือส่ง (ย้อนหลัง)</option>
-                    <option value="คำสั่ง / ประกาศ">คำสั่ง / ประกาศ</option>
-                    <option value="รายงาน / สรุปผลการปฏิบัติงาน">รายงาน / สรุปผลการปฏิบัติงาน</option>
-                    <option value="สัญญา / เอกสารทางกฎหมาย">สัญญา / เอกสารทางกฎหมาย</option>
-                    <option value="บันทึกข้อความภายใน">บันทึกข้อความภายใน</option>
-                    <option value="เอกสารทั่วไป / อื่นๆ">เอกสารทั่วไป / อื่นๆ</option>
+                    <option value="">-- เลือกหน่วยงานผู้ส่ง --</option>
+                    {THAIPOST_ORGANIZATIONS.map((org) => (
+                      <option key={org} value={org}>{org}</option>
+                    ))}
                   </select>
+                  {senderOption === "อื่นๆ (ระบุเอง)" && (
+                    <input 
+                      type="text" 
+                      required
+                      value={customSender}
+                      onChange={(e) => setCustomSender(e.target.value)}
+                      className="mt-1.5 w-full px-3 py-2 border border-red-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-red-50/20 animate-in fade-in"
+                      placeholder="พิมพ์ระบุชื่อหน่วยงานผู้ส่ง..."
+                      autoFocus
+                    />
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    ปี พ.ศ. ของเอกสาร
+                    ถึง / เรียน (หน่วยงานผู้รับ)
                   </label>
-                  <input 
-                    type="text" 
-                    value={historicalForm.historical_year}
-                    onChange={(e) => setHistoricalForm({ ...historicalForm, historical_year: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                    placeholder="เช่น 2564, 2565, 2566"
-                  />
+                  <select
+                    value={recipientOption}
+                    onChange={(e) => setRecipientOption(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                  >
+                    <option value="">-- เลือกหน่วยงานผู้รับ --</option>
+                    {THAIPOST_ORGANIZATIONS.map((org) => (
+                      <option key={org} value={org}>{org}</option>
+                    ))}
+                  </select>
+                  {recipientOption === "อื่นๆ (ระบุเอง)" && (
+                    <input 
+                      type="text" 
+                      required
+                      value={customRecipient}
+                      onChange={(e) => setCustomRecipient(e.target.value)}
+                      className="mt-1.5 w-full px-3 py-2 border border-red-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-red-50/20 animate-in fade-in"
+                      placeholder="พิมพ์ระบุชื่อหน่วยงานผู้รับ..."
+                      autoFocus
+                    />
+                  )}
                 </div>
               </div>
 
+              {/* เลขที่หนังสือ & ลงวันที่เอกสาร */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">
@@ -1328,73 +1406,97 @@ export default function ArchiveDetailPage({ params }: { params: Promise<{ id: st
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    จาก (หน่วยงานผู้ส่ง / ต้นเรื่อง)
-                  </label>
-                  <input 
-                    type="text" 
-                    value={historicalForm.sender}
-                    onChange={(e) => setHistoricalForm({ ...historicalForm, sender: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                    placeholder="เช่น ปณท สำนักงานใหญ่, ฝ่ายการเงิน"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    ถึง / เรียน (หน่วยงานผู้รับ)
-                  </label>
-                  <input 
-                    type="text" 
-                    value={historicalForm.recipient}
-                    onChange={(e) => setHistoricalForm({ ...historicalForm, recipient: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                    placeholder="เช่น ผจก.ไปรษณีย์จังหวัดสุโขทัย"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    ลิงก์ Google Drive (ไฟล์สแกน PDF)
-                  </label>
-                  <input 
-                    type="url" 
-                    value={historicalForm.google_drive_link}
-                    onChange={(e) => setHistoricalForm({ ...historicalForm, google_drive_link: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                    placeholder="https://drive.google.com/..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    จำนวนแผ่น
-                  </label>
-                  <input 
-                    type="text" 
-                    value={historicalForm.page_count}
-                    onChange={(e) => setHistoricalForm({ ...historicalForm, page_count: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                    placeholder="เช่น 3 แผ่น"
-                  />
-                </div>
-              </div>
-
+              {/* ลิงก์ Google Drive */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  หมายเหตุ / รายละเอียดการจัดเก็บเพิ่มเติม
+                  ลิงก์ Google Drive (ไฟล์สแกน PDF)
                 </label>
-                <textarea 
-                  rows={2}
-                  value={historicalForm.notes}
-                  onChange={(e) => setHistoricalForm({ ...historicalForm, notes: e.target.value })}
-                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  placeholder="เช่น เอกสารต้นฉบับเย็บเล่มรวมกับสัญญาปี 2565"
+                <input 
+                  type="url" 
+                  value={historicalForm.google_drive_link}
+                  onChange={(e) => setHistoricalForm({ ...historicalForm, google_drive_link: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  placeholder="https://drive.google.com/..."
                 />
+              </div>
+
+              {/* ส่วนพับเก็บตัวเลือกเพิ่มเติม (ลดความเยอะ ไม่ต้องกรอกหลายช่องถ้าไม่จำเป็น) */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowMoreHistFields(!showMoreHistFields)}
+                  className="flex items-center justify-between w-full px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 transition-colors"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-gray-500" />
+                    {showMoreHistFields ? "ซ่อนตัวเลือกเพิ่มเติม" : "+ ข้อมูลเพิ่มเติม (ประเภทเอกสาร, ปี พ.ศ., จำนวนแผ่น, หมายเหตุ)"}
+                  </span>
+                  {showMoreHistFields ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                </button>
+
+                {showMoreHistFields && (
+                  <div className="mt-3 p-3 bg-gray-50/70 rounded-xl border border-gray-200 space-y-3 animate-in fade-in">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          ประเภทเอกสารย้อนหลัง
+                        </label>
+                        <select
+                          value={historicalForm.historical_type}
+                          onChange={(e) => setHistoricalForm({ ...historicalForm, historical_type: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                        >
+                          <option value="หนังสือรับ (ย้อนหลัง)">หนังสือรับ (ย้อนหลัง)</option>
+                          <option value="หนังสือส่ง (ย้อนหลัง)">หนังสือส่ง (ย้อนหลัง)</option>
+                          <option value="คำสั่ง / ประกาศ">คำสั่ง / ประกาศ</option>
+                          <option value="รายงาน / สรุปผลการปฏิบัติงาน">รายงาน / สรุปผลการปฏิบัติงาน</option>
+                          <option value="สัญญา / เอกสารทางกฎหมาย">สัญญา / เอกสารทางกฎหมาย</option>
+                          <option value="บันทึกข้อความภายใน">บันทึกข้อความภายใน</option>
+                          <option value="เอกสารทั่วไป / อื่นๆ">เอกสารทั่วไป / อื่นๆ</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          ปี พ.ศ. ของเอกสาร
+                        </label>
+                        <input 
+                          type="text" 
+                          value={historicalForm.historical_year}
+                          onChange={(e) => setHistoricalForm({ ...historicalForm, historical_year: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                          placeholder="เช่น 2564, 2565, 2566"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        จำนวนแผ่น
+                      </label>
+                      <input 
+                        type="text" 
+                        value={historicalForm.page_count}
+                        onChange={(e) => setHistoricalForm({ ...historicalForm, page_count: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                        placeholder="เช่น 1 หรือ 3 แผ่น"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        หมายเหตุ / รายละเอียดการจัดเก็บเพิ่มเติม
+                      </label>
+                      <textarea 
+                        rows={2}
+                        value={historicalForm.notes}
+                        onChange={(e) => setHistoricalForm({ ...historicalForm, notes: e.target.value })}
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                        placeholder="เช่น เอกสารต้นฉบับเย็บเล่มรวมกับสัญญาปี 2565"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end space-x-3 pt-3 border-t">
