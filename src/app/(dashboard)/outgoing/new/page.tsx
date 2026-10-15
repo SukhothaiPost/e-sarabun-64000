@@ -32,7 +32,6 @@ export default function NewOutgoingDocumentPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [incomingDocs, setIncomingDocs] = useState<SarabanDocument[]>([]);
   const [runningNumber, setRunningNumber] = useState("");
 
   const [recipientOption, setRecipientOption] = useState("ปข.6");
@@ -44,7 +43,6 @@ export default function NewOutgoingDocumentPage() {
     sent_date: new Date().toISOString().split('T')[0],
     subject: "",
     notes: "",
-    related_document_id: "",
   });
 
   const [driveLink, setDriveLink] = useState({
@@ -57,7 +55,7 @@ export default function NewOutgoingDocumentPage() {
       try {
         const currentYear = new Date().getFullYear() + 543;
 
-        // 1. Fetch next outgoing running number preview
+        // Fetch next outgoing running number preview
         const configRef = doc(db, "system_configs", "running_numbers");
         const configSnap = await getDoc(configRef);
         let lastNum = 0;
@@ -67,17 +65,6 @@ export default function NewOutgoingDocumentPage() {
         }
         const nextNum = (lastNum + 1).toString();
         setRunningNumber(nextNum);
-
-        // 2. Fetch incoming docs for reply reference
-        const qDocs = query(
-          collection(db, "documents"), 
-          where("document_type", "==", "incoming"), 
-          where("deleted", "==", false)
-        );
-        const docsSnap = await getDocs(qDocs);
-        const docsList: SarabanDocument[] = [];
-        docsSnap.forEach((doc) => docsList.push(doc.data() as SarabanDocument));
-        setIncomingDocs(docsList);
       } catch (err) {
         console.error("Failed to fetch data", err);
         const currentYear = new Date().getFullYear() + 543;
@@ -114,14 +101,6 @@ export default function NewOutgoingDocumentPage() {
         const currentYear = new Date().getFullYear() + 543;
         const configRef = doc(db, "system_configs", "running_numbers");
         const configDoc = await transaction.get(configRef);
-
-        // Read related document BEFORE any writes if selected
-        let relatedDocRef = null;
-        let relatedDocSnap = null;
-        if (formData.related_document_id) {
-          relatedDocRef = doc(db, "documents", formData.related_document_id);
-          relatedDocSnap = await transaction.get(relatedDocRef);
-        }
 
         let outgoingLastNumber = 0;
         let yearInConfig = currentYear;
@@ -162,7 +141,7 @@ export default function NewOutgoingDocumentPage() {
           urgency: "ปกติ",
           confidentiality: "ปกติ",
           responsible_user_id: "",
-          status: relatedDocSnap && relatedDocSnap.exists() && relatedDocSnap.data().archive_location_id ? "archived" : "registered",
+          status: "registered",
           notes: formData.notes,
           drive_links: driveLink.url.trim() ? [{
             title: driveLink.title.trim() || "เอกสารแนบ Google Drive",
@@ -171,13 +150,13 @@ export default function NewOutgoingDocumentPage() {
             created_by: appUser.displayName || "เจ้าหน้าที่",
             created_at: new Date(),
           }] : [],
-          archive_location_id: relatedDocSnap && relatedDocSnap.exists() ? (relatedDocSnap.data().archive_location_id || "") : "",
-          archive_location_code: relatedDocSnap && relatedDocSnap.exists() ? (relatedDocSnap.data().archive_location_code || "") : "",
-          archive_cabinet: relatedDocSnap && relatedDocSnap.exists() ? (relatedDocSnap.data().archive_cabinet || "") : "",
-          archive_shelf: relatedDocSnap && relatedDocSnap.exists() ? (relatedDocSnap.data().archive_shelf || "") : "",
-          archive_folder: relatedDocSnap && relatedDocSnap.exists() ? (relatedDocSnap.data().archive_folder || "") : "",
-          archive_folder_name: relatedDocSnap && relatedDocSnap.exists() ? (relatedDocSnap.data().archive_folder_name || "") : "",
-          related_documents: formData.related_document_id ? [formData.related_document_id] : [],
+          archive_location_id: "",
+          archive_location_code: "",
+          archive_cabinet: "",
+          archive_shelf: "",
+          archive_folder: "",
+          archive_folder_name: "",
+          related_documents: [],
           created_by: appUser.id,
           updated_by: appUser.id,
           createdAt: serverTimestamp(),
@@ -185,18 +164,6 @@ export default function NewOutgoingDocumentPage() {
           deleted: false,
         };
         transaction.set(newDocRef, docData);
-
-        // 3. Write related document update
-        if (relatedDocRef && relatedDocSnap && relatedDocSnap.exists()) {
-          const relatedDocData = relatedDocSnap.data();
-          const existingLinks = relatedDocData.related_documents || [];
-          if (!existingLinks.includes(newDocRef.id)) {
-            transaction.update(relatedDocRef, {
-              related_documents: [...existingLinks, newDocRef.id],
-              updatedAt: serverTimestamp()
-            });
-          }
-        }
 
         const logRef = doc(collection(db, "activity_logs"));
         transaction.set(logRef, {
@@ -227,7 +194,7 @@ export default function NewOutgoingDocumentPage() {
         </Link>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">ทะเบียนหนังสือส่ง</h1>
-          <p className="text-sm text-gray-500">สร้างและออกเลขหนังสือส่งออกภายนอกหน่วยงาน</p>
+          <p className="text-sm text-gray-500">ออกเลขทะเบียนส่งกรณีตั้งเรื่องเอง ออกภายนอกหน่วยงาน (ไม่เชื่อมโยงกับทะเบียนรับ)</p>
         </div>
       </div>
 
@@ -330,27 +297,6 @@ export default function NewOutgoingDocumentPage() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" 
               />
             </div>
-          </div>
-        </div>
-
-        {/* ความเชื่อมโยงกับหนังสือรับ */}
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b">ความเชื่อมโยงกับหนังสือรับ (ตอบกลับ)</h2>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">อ้างอิงหนังสือรับ (ถ้ามี)</label>
-            <select 
-              name="related_document_id" 
-              value={formData.related_document_id} 
-              onChange={handleChange} 
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
-            >
-              <option value="">-- ไม่ระบุอ้างอิง --</option>
-              {incomingDocs.map(doc => (
-                <option key={doc.id} value={doc.id}>
-                  {doc.running_number} - {doc.subject.substring(0, 50)}{doc.subject.length > 50 ? '...' : ''}
-                </option>
-              ))}
-            </select>
           </div>
         </div>
 

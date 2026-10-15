@@ -15,7 +15,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/lib/contexts/AuthContext";
-import { SarabanDocument, ArchiveLocation, DriveLink } from "@/types";
+import { SarabanDocument, ArchiveLocation, DriveLink, PostalTracking } from "@/types";
 import { formatToBuddhistEra } from "@/lib/dateUtils";
 import { POSTAL_BRANCHES } from "@/lib/constants";
 import { 
@@ -36,7 +36,9 @@ import {
   FileText,
   Inbox,
   Send,
-  ArrowRight
+  ArrowRight,
+  Package,
+  Truck
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -48,6 +50,7 @@ export default function IncomingDocumentDetailPage({ params }: { params: Promise
   
   const [document, setDocument] = useState<SarabanDocument | null>(null);
   const [relatedDocs, setRelatedDocs] = useState<SarabanDocument[]>([]);
+  const [linkedTrackings, setLinkedTrackings] = useState<PostalTracking[]>([]);
   const [loading, setLoading] = useState(true);
   const [archiveLocations, setArchiveLocations] = useState<ArchiveLocation[]>([]);
 
@@ -170,6 +173,49 @@ export default function IncomingDocumentDetailPage({ params }: { params: Promise
         } catch (e) {}
 
         setRelatedDocs(Array.from(relMap.values()));
+
+        // Fetch linked postal trackings (ส่งต่อเรื่อง)
+        try {
+          const qTrack = query(
+            collection(db, "postal_trackings"),
+            where("incoming_doc_id", "==", loadedDoc.id),
+            where("deleted", "==", false)
+          );
+          const snapTrack = await getDocs(qTrack);
+          const tracks: PostalTracking[] = [];
+          snapTrack.forEach(t => {
+            const tData = t.data();
+            tracks.push({
+              ...tData,
+              sent_date: tData.sent_date?.toDate ? tData.sent_date.toDate() : new Date(tData.sent_date),
+              createdAt: tData.createdAt?.toDate ? tData.createdAt.toDate() : new Date(tData.createdAt),
+            } as PostalTracking);
+          });
+
+          // Also check if document has a tracking_number but not in qTrack
+          if (loadedDoc.tracking_number && !tracks.some(tr => tr.tracking_number === loadedDoc.tracking_number)) {
+            const qTrackNum = query(
+              collection(db, "postal_trackings"),
+              where("tracking_number", "==", loadedDoc.tracking_number),
+              where("deleted", "==", false)
+            );
+            const snapTrackNum = await getDocs(qTrackNum);
+            snapTrackNum.forEach(t => {
+              const tData = t.data();
+              if (!tracks.some(tr => tr.id === t.id)) {
+                tracks.push({
+                  ...tData,
+                  sent_date: tData.sent_date?.toDate ? tData.sent_date.toDate() : new Date(tData.sent_date),
+                  createdAt: tData.createdAt?.toDate ? tData.createdAt.toDate() : new Date(tData.createdAt),
+                } as PostalTracking);
+              }
+            });
+          }
+
+          setLinkedTrackings(tracks);
+        } catch (e) {
+          console.error("Error fetching linked trackings:", e);
+        }
       }
     } catch (err) {
       console.error("Error fetching doc:", err);
@@ -627,77 +673,78 @@ export default function IncomingDocumentDetailPage({ params }: { params: Promise
             )}
           </div>
 
-          {/* Related Documents Card */}
+          {/* การส่งต่อเรื่อง / บันทึกเลข Tracking */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4 pb-2 border-b">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-2 border-b">
               <h2 className="text-lg font-bold text-gray-900 flex items-center">
-                <Send className="w-5 h-5 mr-2 text-indigo-600" />
-                หนังสือส่งที่ตอบกลับ / เอกสารที่เชื่อมโยง ({relatedDocs.length})
+                <Package className="w-5 h-5 mr-2 text-red-600" />
+                การส่งต่อเรื่อง / บันทึกเลข Tracking ({linkedTrackings.length})
               </h2>
               <Link
-                href={`/outgoing/new?reply_to=${document.id}&subject=${encodeURIComponent("ตอบกลับ: " + document.subject)}`}
-                className="text-xs font-medium text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg transition-colors flex items-center"
+                href={`/tracking/new?incoming_id=${document.id}`}
+                className="text-xs font-semibold text-white bg-red-600 hover:bg-red-700 px-3 py-2 rounded-lg transition-colors flex items-center shadow-xs self-start sm:self-auto"
               >
                 <Plus className="w-3.5 h-3.5 mr-1" />
-                สร้างหนังสือส่งตอบกลับ
+                บันทึกเลข Tracking / ส่งต่อเรื่อง
               </Link>
             </div>
 
-            {relatedDocs.length === 0 ? (
-              <div className="text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                <p className="text-sm text-gray-500">ยังไม่มีหนังสือส่งที่ตอบกลับหรือเชื่อมโยงกับหนังสือรับนี้</p>
+            {linkedTrackings.length === 0 ? (
+              <div className="text-center py-6 bg-red-50/30 rounded-xl border border-dashed border-red-200">
+                <Truck className="w-8 h-8 text-red-400 mx-auto mb-2 opacity-60" />
+                <p className="text-sm font-medium text-gray-700">ยังไม่มีการบันทึกเลข Tracking สำหรับการส่งต่อเรื่องหนังสือรับนี้</p>
+                <p className="text-xs text-gray-500 mt-1 mb-3">เมื่อส่งเอกสารหรือพัสดุต่อเรื่อง สามารถบันทึกเลข Tracking เพื่อติดตามสถานะและจัดเก็บเข้าแฟ้มได้</p>
                 <Link
-                  href={`/outgoing/new?reply_to=${document.id}&subject=${encodeURIComponent("ตอบกลับ: " + document.subject)}`}
-                  className="inline-flex items-center text-xs font-semibold text-blue-600 hover:underline mt-2"
+                  href={`/tracking/new?incoming_id=${document.id}`}
+                  className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition-colors shadow-xs"
                 >
                   <Plus className="w-3.5 h-3.5 mr-1" />
-                  ออกเลขหนังสือส่งตอบกลับเรื่องนี้
+                  บันทึกเลข Tracking / ส่งต่อเรื่อง
                 </Link>
               </div>
             ) : (
               <div className="space-y-3">
-                <p className="text-xs text-gray-500">
-                  * เอกสารที่เชื่อมโยงกันจะถูกจัดเก็บเข้าแฟ้มเดียวกันโดยอัตโนมัติเมื่อมีการบันทึกการจัดเก็บ
-                </p>
-                {relatedDocs.map((rel) => {
-                  const isOutgoing = rel.document_type === "outgoing";
-                  const href = isOutgoing ? `/outgoing/${rel.id}` : `/incoming/${rel.id}`;
+                {linkedTrackings.map((trk) => {
+                  const trackUrl = trk.tracking_number 
+                    ? `https://track.thailandpost.co.th/?trackNumber=${encodeURIComponent(trk.tracking_number)}`
+                    : "https://track.thailandpost.co.th";
                   return (
                     <div
-                      key={rel.id}
-                      className="p-4 rounded-xl border border-gray-200 bg-gray-50/70 hover:bg-blue-50/40 hover:border-blue-200 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      key={trk.id}
+                      className="p-4 rounded-xl border border-red-200 bg-red-50/30 hover:bg-red-50/70 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <span className={`text-xs px-2 py-0.5 rounded font-medium ${isOutgoing ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>
-                            {isOutgoing ? "หนังสือส่ง" : "หนังสือรับ"}
+                          <span className="text-xs px-2 py-0.5 rounded font-bold bg-red-600 text-white">
+                            {trk.courier || "EMS"}
                           </span>
-                          <span className="text-sm font-bold text-gray-900">
-                            เลขทะเบียน: {rel.running_number || "-"}
+                          <span className="font-mono font-bold text-base text-red-700">
+                            {trk.tracking_number}
                           </span>
-                          {rel.document_number && (
-                            <span className="text-xs text-gray-500">
-                              (เลขที่ {rel.document_number})
-                            </span>
-                          )}
+                          <span className="text-xs text-gray-500">
+                            • ส่งวันที่: {formatToBuddhistEra(trk.sent_date)}
+                          </span>
                         </div>
-                        <p className="text-sm font-medium text-gray-800 line-clamp-1">{rel.subject}</p>
-                        <div className="flex items-center gap-3 text-xs text-gray-500">
-                          <span>ถึง/จาก: {isOutgoing ? rel.recipient : rel.sender}</span>
-                          {rel.archive_location_code && (
-                            <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-mono text-[11px] border border-emerald-200">
-                              แฟ้ม: {rel.archive_folder_name || rel.archive_folder} ({rel.archive_location_code})
+                        <p className="text-sm font-semibold text-gray-900">{trk.subject}</p>
+                        <div className="flex items-center gap-2 text-xs text-gray-600">
+                          <span>ถึง: <strong>{trk.recipient_name}</strong></span>
+                          {trk.archive_location_code && (
+                            <span className="text-amber-800 bg-amber-100 px-2 py-0.5 rounded font-mono text-[11px] border border-amber-200">
+                              📁 แฟ้ม: {trk.archive_folder_name || trk.archive_folder} ({trk.archive_location_code})
                             </span>
                           )}
                         </div>
                       </div>
-                      <Link
-                        href={href}
-                        className="inline-flex items-center justify-center text-xs font-semibold text-blue-600 hover:text-blue-800 bg-white border border-gray-200 hover:border-blue-300 px-3 py-1.5 rounded-lg shadow-sm whitespace-nowrap"
+
+                      <a
+                        href={trackUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center text-xs font-semibold text-red-700 hover:text-red-900 bg-white border border-red-300 hover:bg-red-50 px-3 py-2 rounded-lg shadow-xs whitespace-nowrap self-start sm:self-auto"
                       >
-                        ดูเอกสาร
-                        <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                      </Link>
+                        <ExternalLink className="w-3.5 h-3.5 mr-1 text-red-600" />
+                        เช็คพัสดุไปรษณีย์ไทย
+                      </a>
                     </div>
                   );
                 })}

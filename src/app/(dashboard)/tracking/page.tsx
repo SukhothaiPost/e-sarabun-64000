@@ -5,9 +5,9 @@ import Link from "next/link";
 import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/lib/contexts/AuthContext";
-import { PostalTracking } from "@/types";
+import { PostalTracking, ArchiveLocation, THAIPOST_ORGANIZATIONS } from "@/types";
 import { formatToBuddhistEra } from "@/lib/dateUtils";
-import { POSTAL_BRANCHES, COURIER_OPTIONS } from "@/lib/constants";
+import { COURIER_OPTIONS } from "@/lib/constants";
 import { 
   Truck, 
   Plus, 
@@ -19,12 +19,14 @@ import {
   X, 
   Save, 
   AlertTriangle, 
-  CheckCircle 
+  CheckCircle,
+  FolderCheck
 } from "lucide-react";
 
 export default function TrackingListPage() {
   const { appUser } = useAuth();
   const [trackings, setTrackings] = useState<PostalTracking[]>([]);
+  const [archiveLocations, setArchiveLocations] = useState<ArchiveLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -47,6 +49,7 @@ export default function TrackingListPage() {
     recipient_custom: "",
     recipient_is_custom: false,
     sent_date: "",
+    archive_location_id: "",
     notes: "",
   });
 
@@ -90,8 +93,20 @@ export default function TrackingListPage() {
     }
   };
 
+  const fetchArchiveLocations = async () => {
+    try {
+      const snap = await getDocs(collection(db, "archive_locations"));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as ArchiveLocation));
+      list.sort((a, b) => a.location_code.localeCompare(b.location_code));
+      setArchiveLocations(list);
+    } catch (err) {
+      console.error("Error fetching archive locations:", err);
+    }
+  };
+
   useEffect(() => {
     fetchTrackings();
+    fetchArchiveLocations();
   }, []);
 
   const openEditModal = (item: PostalTracking) => {
@@ -99,7 +114,7 @@ export default function TrackingListPage() {
     setActionError("");
 
     const isKnownCourier = COURIER_OPTIONS.includes(item.courier);
-    const isKnownRecipient = POSTAL_BRANCHES.includes(item.recipient_name);
+    const isKnownRecipient = (THAIPOST_ORGANIZATIONS as readonly string[]).includes(item.recipient_name);
 
     setEditFormData({
       tracking_number: item.tracking_number,
@@ -111,6 +126,7 @@ export default function TrackingListPage() {
       recipient_custom: isKnownRecipient ? "" : item.recipient_name,
       recipient_is_custom: !isKnownRecipient,
       sent_date: toInputDate(item.sent_date),
+      archive_location_id: item.archive_location_id || "",
       notes: item.notes || "",
     });
 
@@ -153,30 +169,71 @@ export default function TrackingListPage() {
     setActionError("");
 
     try {
+      const selectedLoc = archiveLocations.find(l => l.id === editFormData.archive_location_id);
       const trackingRef = doc(db, "postal_trackings", selectedTracking.id);
-      const updateData = {
+      const updateData: any = {
         tracking_number: editFormData.tracking_number.trim().toUpperCase(),
         courier: finalCourier,
         subject: editFormData.subject.trim(),
         recipient_name: finalRecipient,
         sent_date: editFormData.sent_date ? new Date(editFormData.sent_date) : new Date(),
         notes: editFormData.notes.trim(),
+        archive_location_id: editFormData.archive_location_id || "",
+        archive_location_code: selectedLoc?.location_code || "",
+        archive_cabinet: selectedLoc?.cabinet || "",
+        archive_shelf: selectedLoc?.shelf || "",
+        archive_folder: selectedLoc?.folder || "",
+        archive_folder_name: selectedLoc?.folder_name || selectedLoc?.sequence || "",
         updatedAt: serverTimestamp(),
       };
 
       await updateDoc(trackingRef, updateData);
 
-      // If tied to an outgoing doc, update document's tracking info as well
+      // If tied to an outgoing doc, update document's tracking info & archive
       if (selectedTracking.outgoing_doc_id) {
         try {
           const docRef = doc(db, "documents", selectedTracking.outgoing_doc_id);
-          await updateDoc(docRef, {
+          const outUpdate: any = {
             tracking_number: editFormData.tracking_number.trim().toUpperCase(),
             courier: finalCourier,
             updatedAt: serverTimestamp(),
-          });
+          };
+          if (selectedLoc) {
+            outUpdate.archive_location_id = selectedLoc.id;
+            outUpdate.archive_location_code = selectedLoc.location_code;
+            outUpdate.archive_cabinet = selectedLoc.cabinet;
+            outUpdate.archive_shelf = selectedLoc.shelf;
+            outUpdate.archive_folder = selectedLoc.folder;
+            outUpdate.archive_folder_name = selectedLoc.folder_name || selectedLoc.sequence;
+            outUpdate.status = "archived";
+          }
+          await updateDoc(docRef, outUpdate);
         } catch (syncErr) {
           console.warn("Could not sync with outgoing document:", syncErr);
+        }
+      }
+
+      // If tied to an incoming doc (ต่อเรื่อง), update document's tracking info & archive
+      if (selectedTracking.incoming_doc_id) {
+        try {
+          const docRef = doc(db, "documents", selectedTracking.incoming_doc_id);
+          const inUpdate: any = {
+            tracking_number: editFormData.tracking_number.trim().toUpperCase(),
+            courier: finalCourier,
+            updatedAt: serverTimestamp(),
+          };
+          if (selectedLoc) {
+            inUpdate.archive_location_id = selectedLoc.id;
+            inUpdate.archive_location_code = selectedLoc.location_code;
+            inUpdate.archive_cabinet = selectedLoc.cabinet;
+            inUpdate.archive_shelf = selectedLoc.shelf;
+            inUpdate.archive_folder = selectedLoc.folder;
+            inUpdate.archive_folder_name = selectedLoc.folder_name || selectedLoc.sequence;
+            inUpdate.status = "archived";
+          }
+          await updateDoc(docRef, inUpdate);
+        } catch (syncErr) {
+          console.warn("Could not sync with incoming document:", syncErr);
         }
       }
 
@@ -248,7 +305,10 @@ export default function TrackingListPage() {
     item.tracking_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.recipient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (item.outgoing_running_number && item.outgoing_running_number.toLowerCase().includes(searchTerm.toLowerCase()))
+    (item.outgoing_running_number && item.outgoing_running_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (item.incoming_running_number && item.incoming_running_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (item.archive_folder_name && item.archive_folder_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (item.archive_location_code && item.archive_location_code.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
@@ -283,7 +343,7 @@ export default function TrackingListPage() {
             </div>
             <input
               type="text"
-              placeholder="ค้นหาเลข Tracking, เลขที่หนังสือส่ง, เรื่อง, หรือผู้รับ..."
+              placeholder="ค้นหาเลข Tracking, เลขที่หนังสือ, เรื่อง, ผู้รับ, หรือแฟ้ม..."
               className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 sm:text-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -297,9 +357,10 @@ export default function TrackingListPage() {
               <tr>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">เลข Tracking</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">ผู้ให้บริการ</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">อ้างอิงหนังสือส่ง</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">อ้างอิงหนังสือ</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">เรื่อง / รายการสิ่งของ</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">ผู้รับ</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">แฟ้มจัดเก็บ</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">วันที่ส่ง</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">การจัดการ</th>
               </tr>
@@ -307,7 +368,7 @@ export default function TrackingListPage() {
             <tbody className="bg-white divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                     <div className="flex justify-center mb-4">
                       <div className="h-8 w-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin"></div>
                     </div>
@@ -316,7 +377,7 @@ export default function TrackingListPage() {
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                     <Package className="h-12 w-12 mx-auto text-gray-400 mb-2" />
                     ไม่พบรายการบันทึกเลขพัสดุ
                   </td>
@@ -332,13 +393,23 @@ export default function TrackingListPage() {
                         {item.courier}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                      {item.outgoing_running_number ? (
-                        <Link href={`/outgoing`} className="text-red-600 hover:underline">
-                          {item.outgoing_running_number}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {item.incoming_running_number ? (
+                        <Link 
+                          href={item.incoming_doc_id ? `/incoming/${item.incoming_doc_id}` : '/incoming'} 
+                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                        >
+                          ต่อเรื่อง: {item.incoming_running_number}
+                        </Link>
+                      ) : item.outgoing_running_number ? (
+                        <Link 
+                          href={item.outgoing_doc_id ? `/outgoing/${item.outgoing_doc_id}` : '/outgoing'} 
+                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                        >
+                          ส่ง: {item.outgoing_running_number}
                         </Link>
                       ) : (
-                        <span className="text-gray-400 text-xs italic">ไม่มีเลขหนังสือ (ส่งตรง)</span>
+                        <span className="text-gray-400 text-xs italic">สร้างรายการส่งเอง</span>
                       )}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
@@ -346,6 +417,19 @@ export default function TrackingListPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                       {item.recipient_name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {item.archive_location_code ? (
+                        <span 
+                          className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200" 
+                          title={`ตู้ ${item.archive_cabinet || '-'} ชั้น ${item.archive_shelf || '-'} (${item.archive_location_code})`}
+                        >
+                          <FolderCheck className="w-3.5 h-3.5 mr-1 text-amber-600 shrink-0" />
+                          <span className="truncate max-w-[120px]">{item.archive_folder_name || item.archive_folder || item.archive_location_code}</span>
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs italic">-</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatToBuddhistEra(item.sent_date)}
@@ -405,6 +489,20 @@ export default function TrackingListPage() {
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {selectedTracking.incoming_running_number && (
+              <div className="mt-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center">
+                <span className="font-semibold mr-1">📍 ต่อเรื่องจากหนังสือรับ:</span>
+                <span className="font-mono font-bold">{selectedTracking.incoming_running_number}</span>
+              </div>
+            )}
+
+            {selectedTracking.outgoing_running_number && (
+              <div className="mt-3 p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 flex items-center">
+                <span className="font-semibold mr-1">✉️ อ้างอิงหนังสือส่ง:</span>
+                <span className="font-mono font-bold">{selectedTracking.outgoing_running_number}</span>
+              </div>
+            )}
 
             {actionError && (
               <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
@@ -489,7 +587,7 @@ export default function TrackingListPage() {
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
-                  {POSTAL_BRANCHES.map((b) => (
+                  {THAIPOST_ORGANIZATIONS.map((b) => (
                     <option key={b} value={b}>{b}</option>
                   ))}
                 </select>
@@ -506,6 +604,26 @@ export default function TrackingListPage() {
                     />
                   </div>
                 )}
+              </div>
+
+              {/* การจัดเก็บเข้าแฟ้ม (Archive Folder) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                  <FolderCheck className="w-4 h-4 mr-1 text-amber-600" />
+                  การจัดเก็บเข้าแฟ้ม (Archive Folder)
+                </label>
+                <select
+                  value={editFormData.archive_location_id}
+                  onChange={(e) => setEditFormData({ ...editFormData, archive_location_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                >
+                  <option value="">-- ยังไม่จัดเก็บเข้าแฟ้ม --</option>
+                  {archiveLocations.map((loc) => (
+                    <option key={loc.id} value={loc.id}>
+                      [{loc.location_code}] {loc.folder_name || loc.sequence} (ตู้ {loc.cabinet} / ชั้น {loc.shelf})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
