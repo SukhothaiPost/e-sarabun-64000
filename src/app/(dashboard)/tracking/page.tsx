@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, updateDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { PostalTracking, ArchiveLocation, THAIPOST_ORGANIZATIONS } from "@/types";
@@ -20,7 +20,9 @@ import {
   Save, 
   AlertTriangle, 
   CheckCircle,
-  FolderCheck
+  FolderCheck,
+  FolderPlus,
+  Folder
 } from "lucide-react";
 
 export default function TrackingListPage() {
@@ -37,6 +39,20 @@ export default function TrackingListPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
+
+  // Quick Archive Modal state (สำหรับเจ้าของงานมาเลือกเข้าแฟ้ม)
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+  const [archiveTargetTracking, setArchiveTargetTracking] = useState<PostalTracking | null>(null);
+  const [archiveMode, setArchiveMode] = useState<"select" | "create">("select");
+  const [selectedArchiveId, setSelectedArchiveId] = useState("");
+  const [newArchiveData, setNewArchiveData] = useState({
+    cabinet: "1",
+    shelf: "01",
+    category: "งานสารบรรณ",
+    folder: "001",
+    sequence: "แฟ้มหนังสือรับ",
+  });
+  const [filterTab, setFilterTab] = useState<'all' | 'unarchived' | 'archived'>('all');
 
   // Edit form state
   const [editFormData, setEditFormData] = useState({
@@ -301,15 +317,210 @@ export default function TrackingListPage() {
     return `https://track.thailandpost.co.th/?trackNumber=${encodeURIComponent(trackingNumber)}`;
   };
 
-  const filtered = trackings.filter(item => 
-    item.tracking_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.recipient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (item.outgoing_running_number && item.outgoing_running_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (item.incoming_running_number && item.incoming_running_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (item.archive_folder_name && item.archive_folder_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (item.archive_location_code && item.archive_location_code.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const openArchiveModal = (item: PostalTracking) => {
+    setArchiveTargetTracking(item);
+    setSelectedArchiveId(item.archive_location_id || "");
+    setArchiveMode("select");
+    setActionError("");
+    setIsArchiveModalOpen(true);
+  };
+
+  const handleSaveArchive = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!archiveTargetTracking) return;
+
+    setIsSubmitting(true);
+    setActionError("");
+
+    try {
+      let targetLocation: ArchiveLocation | null = null;
+
+      if (archiveMode === "select") {
+        if (!selectedArchiveId) {
+          setActionError("กรุณาเลือกแฟ้มจัดเก็บ");
+          setIsSubmitting(false);
+          return;
+        }
+        targetLocation = archiveLocations.find(l => l.id === selectedArchiveId) || null;
+      } else {
+        if (!newArchiveData.folder.trim()) {
+          setActionError("กรุณาระบุเลขที่แฟ้ม");
+          setIsSubmitting(false);
+          return;
+        }
+        if (!newArchiveData.sequence.trim()) {
+          setActionError("กรุณาระบุชื่อแฟ้ม");
+          setIsSubmitting(false);
+          return;
+        }
+
+        const p1 = newArchiveData.cabinet.replace(/^ตู้\s*/, "").trim() || "1";
+        const p2Raw = newArchiveData.shelf.replace(/^ชั้น\s*/, "").trim();
+        const p2 = !isNaN(Number(p2Raw)) && p2Raw ? p2Raw.padStart(2, '0') : (p2Raw || "01");
+        const p3 = newArchiveData.category.trim() || "XX";
+        const p4Raw = newArchiveData.folder.trim();
+        const p4 = !isNaN(Number(p4Raw)) && p4Raw ? p4Raw.padStart(3, '0') : (p4Raw || "000");
+        const p5Raw = newArchiveData.sequence.trim();
+        const p5 = p5Raw || "ชื่อแฟ้ม";
+        const locationCode = `${p1}-${p2}-${p3}-${p4}-${p5}`;
+
+        const newLocRef = doc(collection(db, "archive_locations"));
+        const newLoc: ArchiveLocation = {
+          id: newLocRef.id,
+          cabinet: newArchiveData.cabinet,
+          shelf: newArchiveData.shelf,
+          category: newArchiveData.category,
+          folder: newArchiveData.folder,
+          sequence: newArchiveData.sequence,
+          folder_name: newArchiveData.sequence,
+          location_code: locationCode,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+
+        await setDoc(newLocRef, newLoc);
+        targetLocation = newLoc;
+        await fetchArchiveLocations();
+      }
+
+      if (!targetLocation) {
+        throw new Error("ไม่พบข้อมูลจุดจัดเก็บ");
+      }
+
+      const trackingRef = doc(db, "postal_trackings", archiveTargetTracking.id);
+      await updateDoc(trackingRef, {
+        archive_location_id: targetLocation.id,
+        archive_location_code: targetLocation.location_code,
+        archive_cabinet: targetLocation.cabinet,
+        archive_shelf: targetLocation.shelf,
+        archive_folder: targetLocation.folder,
+        archive_folder_name: targetLocation.folder_name || targetLocation.sequence,
+        updatedAt: serverTimestamp(),
+      });
+
+      const archiveUpdate = {
+        archive_location_id: targetLocation.id,
+        archive_location_code: targetLocation.location_code,
+        archive_cabinet: targetLocation.cabinet,
+        archive_shelf: targetLocation.shelf,
+        archive_folder: targetLocation.folder,
+        archive_folder_name: targetLocation.folder_name || targetLocation.sequence,
+        status: "archived" as const,
+        updatedAt: serverTimestamp(),
+        updated_by: appUser?.id || "",
+      };
+
+      if (archiveTargetTracking.incoming_doc_id) {
+        try {
+          const incRef = doc(db, "documents", archiveTargetTracking.incoming_doc_id);
+          await updateDoc(incRef, archiveUpdate);
+        } catch (syncErr) {
+          console.warn("Could not sync incoming doc archive:", syncErr);
+        }
+      }
+
+      if (archiveTargetTracking.outgoing_doc_id) {
+        try {
+          const outRef = doc(db, "documents", archiveTargetTracking.outgoing_doc_id);
+          await updateDoc(outRef, archiveUpdate);
+        } catch (syncErr) {
+          console.warn("Could not sync outgoing doc archive:", syncErr);
+        }
+      }
+
+      setIsArchiveModalOpen(false);
+      setActionSuccess(`จัดเก็บเข้าแฟ้ม "${targetLocation.folder_name || targetLocation.sequence || targetLocation.folder}" เรียบร้อยแล้ว`);
+      setTimeout(() => setActionSuccess(""), 4000);
+      await fetchTrackings();
+    } catch (err: any) {
+      console.error(err);
+      setActionError("เกิดข้อผิดพลาดในการจัดเก็บเข้าแฟ้ม: " + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRemoveTrackingArchive = async () => {
+    if (!archiveTargetTracking) return;
+    if (!confirm("คุณต้องการนำรายการนี้ออกจากแฟ้มจัดเก็บใช่หรือไม่?")) return;
+
+    setIsSubmitting(true);
+    setActionError("");
+    try {
+      const trackingRef = doc(db, "postal_trackings", archiveTargetTracking.id);
+      await updateDoc(trackingRef, {
+        archive_location_id: "",
+        archive_location_code: "",
+        archive_cabinet: "",
+        archive_shelf: "",
+        archive_folder: "",
+        archive_folder_name: "",
+        updatedAt: serverTimestamp(),
+      });
+
+      if (archiveTargetTracking.incoming_doc_id) {
+        try {
+          const incRef = doc(db, "documents", archiveTargetTracking.incoming_doc_id);
+          await updateDoc(incRef, {
+            archive_location_id: "",
+            archive_location_code: "",
+            archive_cabinet: "",
+            archive_shelf: "",
+            archive_folder: "",
+            archive_folder_name: "",
+            status: "registered",
+            updatedAt: serverTimestamp(),
+          });
+        } catch (e) {}
+      }
+
+      if (archiveTargetTracking.outgoing_doc_id) {
+        try {
+          const outRef = doc(db, "documents", archiveTargetTracking.outgoing_doc_id);
+          await updateDoc(outRef, {
+            archive_location_id: "",
+            archive_location_code: "",
+            archive_cabinet: "",
+            archive_shelf: "",
+            archive_folder: "",
+            archive_folder_name: "",
+            status: "registered",
+            updatedAt: serverTimestamp(),
+          });
+        } catch (e) {}
+      }
+
+      setIsArchiveModalOpen(false);
+      setActionSuccess("นำออกจากแฟ้มจัดเก็บเรียบร้อยแล้ว");
+      setTimeout(() => setActionSuccess(""), 4000);
+      await fetchTrackings();
+    } catch (err: any) {
+      console.error(err);
+      setActionError("เกิดข้อผิดพลาด: " + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const unarchivedCount = trackings.filter(t => !t.archive_location_code).length;
+  const archivedCount = trackings.filter(t => !!t.archive_location_code).length;
+
+  const filtered = trackings.filter(item => {
+    const matchesSearch = 
+      item.tracking_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.recipient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.outgoing_running_number && item.outgoing_running_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (item.incoming_running_number && item.incoming_running_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (item.archive_folder_name && item.archive_folder_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (item.archive_location_code && item.archive_location_code.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    if (!matchesSearch) return false;
+
+    if (filterTab === 'unarchived') return !item.archive_location_code;
+    if (filterTab === 'archived') return !!item.archive_location_code;
+    return true;
+  });
 
   return (
     <div className="space-y-6">
@@ -351,6 +562,54 @@ export default function TrackingListPage() {
           </div>
         </div>
 
+        {/* Filter Tabs for เจ้าของงาน */}
+        <div className="flex items-center space-x-1 border-b border-gray-150 px-4 pt-2 bg-gray-50/50">
+          <button
+            type="button"
+            onClick={() => setFilterTab('all')}
+            className={`px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center ${
+              filterTab === 'all'
+                ? 'border-red-600 text-red-600 bg-white shadow-xs rounded-t-lg'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            ทั้งหมด
+            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${filterTab === 'all' ? 'bg-red-100 text-red-700 font-bold' : 'bg-gray-200 text-gray-700'}`}>
+              {trackings.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFilterTab('unarchived')}
+            className={`px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center ${
+              filterTab === 'unarchived'
+                ? 'border-amber-600 text-amber-800 bg-white shadow-xs rounded-t-lg font-bold'
+                : 'border-transparent text-amber-700 hover:text-amber-900'
+            }`}
+          >
+            รอเลือกเข้าแฟ้ม (สำหรับเจ้าของงาน)
+            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${filterTab === 'unarchived' ? 'bg-amber-500 text-white shadow-xs' : 'bg-amber-100 text-amber-800 border border-amber-300'}`}>
+              {unarchivedCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFilterTab('archived')}
+            className={`px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 transition-all flex items-center ${
+              filterTab === 'archived'
+                ? 'border-emerald-600 text-emerald-700 bg-white shadow-xs rounded-t-lg font-bold'
+                : 'border-transparent text-gray-500 hover:text-emerald-700'
+            }`}
+          >
+            จัดเก็บเข้าแฟ้มแล้ว
+            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${filterTab === 'archived' ? 'bg-emerald-100 text-emerald-800 font-bold' : 'bg-gray-200 text-gray-700'}`}>
+              {archivedCount}
+            </span>
+          </button>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-100">
             <thead className="bg-gray-50/70">
@@ -379,7 +638,7 @@ export default function TrackingListPage() {
                 <tr>
                   <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                     <Package className="h-12 w-12 mx-auto text-gray-400 mb-2" />
-                    ไม่พบรายการบันทึกเลขพัสดุ
+                    {filterTab === 'unarchived' ? 'ไม่มีรายการที่รอจัดเก็บเข้าแฟ้ม' : 'ไม่พบรายการบันทึกเลขพัสดุ'}
                   </td>
                 </tr>
               ) : (
@@ -420,15 +679,26 @@ export default function TrackingListPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {item.archive_location_code ? (
-                        <span 
-                          className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200" 
-                          title={`ตู้ ${item.archive_cabinet || '-'} ชั้น ${item.archive_shelf || '-'} (${item.archive_location_code})`}
+                        <button
+                          type="button"
+                          onClick={() => openArchiveModal(item)}
+                          className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 transition-all shadow-xs group"
+                          title={`คลิกเพื่อแก้ไข/เปลี่ยนแฟ้ม (ปัจจุบัน: ตู้ ${item.archive_cabinet || '-'} ชั้น ${item.archive_shelf || '-'})`}
                         >
-                          <FolderCheck className="w-3.5 h-3.5 mr-1 text-amber-600 shrink-0" />
-                          <span className="truncate max-w-[120px]">{item.archive_folder_name || item.archive_folder || item.archive_location_code}</span>
-                        </span>
+                          <FolderCheck className="w-3.5 h-3.5 mr-1.5 text-emerald-600 shrink-0" />
+                          <span className="truncate max-w-[130px]">{item.archive_folder_name || item.archive_folder || item.archive_location_code}</span>
+                          <Edit className="w-3 h-3 ml-1.5 opacity-40 group-hover:opacity-100 text-emerald-700" />
+                        </button>
                       ) : (
-                        <span className="text-gray-400 text-xs italic">-</span>
+                        <button
+                          type="button"
+                          onClick={() => openArchiveModal(item)}
+                          className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 hover:border-amber-400 shadow-xs transition-all group"
+                          title="เจ้าของงานคลิกที่นี่เพื่อเลือกจัดเก็บเอกสารเข้าแฟ้ม"
+                        >
+                          <FolderPlus className="w-3.5 h-3.5 mr-1 text-amber-600 group-hover:scale-110 transition-transform" />
+                          + เลือกเข้าแฟ้ม
+                        </button>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -713,6 +983,242 @@ export default function TrackingListPage() {
                 {isSubmitting ? "กำลังลบ..." : "ยืนยันการลบ"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: เลือกแฟ้มจัดเก็บเอกสาร/พัสดุ (สำหรับเจ้าของงาน) */}
+      {isArchiveModalOpen && archiveTargetTracking && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-4 border-b">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 bg-amber-100 text-amber-800 rounded-xl">
+                  <FolderCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">
+                    เลือกแฟ้มจัดเก็บ (สำหรับเจ้าของงาน)
+                  </h3>
+                  <p className="text-xs text-gray-500">บันทึกตำแหน่งตู้และชั้นเพื่อจัดเก็บเอกสารเข้าแฟ้ม</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsArchiveModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-full"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Target Item Summary Banner */}
+            <div className="mt-4 p-3.5 bg-gray-50 rounded-xl border border-gray-200 space-y-1.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-mono font-bold text-sm text-gray-900 flex items-center">
+                  <Package className="w-3.5 h-3.5 mr-1 text-red-600" />
+                  {archiveTargetTracking.tracking_number}
+                  <span className="ml-1.5 font-sans font-medium text-xs px-2 py-0.5 rounded bg-red-100 text-red-800">
+                    {archiveTargetTracking.courier}
+                  </span>
+                </span>
+                <span className="text-gray-500">ส่งถึง: <strong className="text-gray-800">{archiveTargetTracking.recipient_name}</strong></span>
+              </div>
+              <p className="text-gray-700 font-medium truncate">
+                <span className="text-gray-500">เรื่อง:</span> {archiveTargetTracking.subject}
+              </p>
+              
+              {archiveTargetTracking.incoming_running_number && (
+                <div className="pt-1.5 border-t border-gray-200 text-emerald-800 flex items-center font-medium">
+                  <span className="px-1.5 py-0.5 bg-emerald-100 rounded text-[11px] font-bold mr-1.5">
+                    ต่อเรื่อง
+                  </span>
+                  <span>
+                    เลขที่รับ {archiveTargetTracking.incoming_running_number} (จะถูกอัปเดตสถานะเป็น "จัดเก็บแล้ว" ให้อัตโนมัติ)
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Mode Switch Tabs */}
+            <div className="flex border-b border-gray-200 mt-4">
+              <button
+                type="button"
+                onClick={() => { setArchiveMode("select"); setActionError(""); }}
+                className={`flex-1 py-2 text-sm font-medium border-b-2 text-center transition-all ${
+                  archiveMode === "select"
+                    ? "border-red-600 text-red-600 font-bold"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                เลือกแฟ้มที่มีอยู่ ({archiveLocations.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => { setArchiveMode("create"); setActionError(""); }}
+                className={`flex-1 py-2 text-sm font-medium border-b-2 text-center transition-all ${
+                  archiveMode === "create"
+                    ? "border-red-600 text-red-600 font-bold"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                + สร้างแฟ้มใหม่ทันที
+              </button>
+            </div>
+
+            {actionError && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                {actionError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveArchive} className="mt-4 space-y-4">
+              {archiveMode === "select" ? (
+                <div>
+                  {archiveLocations.length === 0 ? (
+                    <div className="text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                      <Folder className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm text-gray-600 mb-2">ยังไม่มีแฟ้มจัดเก็บในระบบ</p>
+                      <button
+                        type="button"
+                        onClick={() => setArchiveMode("create")}
+                        className="text-xs font-bold text-red-600 hover:text-red-700 underline"
+                      >
+                        กดที่นี่เพื่อสร้างแฟ้มใหม่
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        เลือกแฟ้มจัดเก็บ <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={selectedArchiveId}
+                        onChange={(e) => setSelectedArchiveId(e.target.value)}
+                        required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                      >
+                        <option value="">-- กรุณาเลือกแฟ้ม --</option>
+                        {archiveLocations.map((loc) => (
+                          <option key={loc.id} value={loc.id}>
+                            [{loc.location_code}] {loc.folder_name || loc.sequence} (ตู้ {loc.cabinet} / ชั้น {loc.shelf} • หมวด {loc.category})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">ตู้ (Cabinet)</label>
+                      <input 
+                        type="text" 
+                        value={newArchiveData.cabinet}
+                        onChange={(e) => setNewArchiveData({ ...newArchiveData, cabinet: e.target.value })}
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        placeholder="เช่น 1 หรือ ตู้ 1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">ชั้น (Shelf)</label>
+                      <input 
+                        type="text" 
+                        value={newArchiveData.shelf}
+                        onChange={(e) => setNewArchiveData({ ...newArchiveData, shelf: e.target.value })}
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        placeholder="เช่น 01 หรือ 1"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">หมวดหมู่/งาน (Category)</label>
+                    <input 
+                      type="text" 
+                      value={newArchiveData.category}
+                      onChange={(e) => setNewArchiveData({ ...newArchiveData, category: e.target.value })}
+                      className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                      placeholder="เช่น งานสารบรรณ, การเงิน, บุคคล"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">เลขที่แฟ้ม (Folder No.) <span className="text-red-500">*</span></label>
+                      <input 
+                        type="text" 
+                        required
+                        value={newArchiveData.folder}
+                        onChange={(e) => setNewArchiveData({ ...newArchiveData, folder: e.target.value })}
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        placeholder="เช่น 001"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">ชื่อแฟ้ม (Folder Name) <span className="text-red-500">*</span></label>
+                      <input 
+                        type="text" 
+                        required
+                        value={newArchiveData.sequence}
+                        onChange={(e) => setNewArchiveData({ ...newArchiveData, sequence: e.target.value })}
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        placeholder="เช่น แฟ้มหนังสือรับ 2567"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-50 p-2.5 rounded-lg border border-amber-200 mt-2">
+                    <span className="block text-xs text-amber-800 font-medium">รหัสสถานที่จัดเก็บ (Location Code):</span>
+                    <span className="block text-sm font-mono font-bold text-amber-950 mt-0.5">
+                      {(() => {
+                        const p1 = newArchiveData.cabinet.replace(/^ตู้\s*/, "").trim() || "1";
+                        const p2Raw = newArchiveData.shelf.replace(/^ชั้น\s*/, "").trim();
+                        const p2 = !isNaN(Number(p2Raw)) && p2Raw ? p2Raw.padStart(2, '0') : (p2Raw || "01");
+                        const p3 = newArchiveData.category.trim() || "XX";
+                        const p4Raw = newArchiveData.folder.trim();
+                        const p4 = !isNaN(Number(p4Raw)) && p4Raw ? p4Raw.padStart(3, '0') : (p4Raw || "000");
+                        const p5Raw = newArchiveData.sequence.trim();
+                        const p5 = p5Raw || "ชื่อแฟ้ม";
+                        return `${p1}-${p2}-${p3}-${p4}-${p5}`;
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-4 border-t">
+                {archiveTargetTracking.archive_location_code ? (
+                  <button
+                    type="button"
+                    onClick={handleRemoveTrackingArchive}
+                    disabled={isSubmitting}
+                    className="text-xs text-red-600 hover:text-red-800 font-medium hover:underline"
+                  >
+                    นำออกจากแฟ้ม
+                  </button>
+                ) : <span />}
+
+                <div className="flex space-x-3">
+                  <button 
+                    type="button"
+                    onClick={() => setIsArchiveModalOpen(false)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={isSubmitting || (archiveMode === "select" && archiveLocations.length === 0)}
+                    className="flex items-center px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold shadow-md shadow-red-200 transition-colors disabled:opacity-50"
+                  >
+                    <FolderCheck className="w-4 h-4 mr-2" />
+                    {isSubmitting ? "กำลังบันทึก..." : "บันทึกเข้าแฟ้ม"}
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}

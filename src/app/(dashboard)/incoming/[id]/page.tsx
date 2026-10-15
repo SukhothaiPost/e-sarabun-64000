@@ -512,6 +512,24 @@ export default function IncomingDocumentDetailPage({ params }: { params: Promise
         }
       }
 
+      // ALSO sync linked postal trackings into the exact same folder!
+      for (const trk of linkedTrackings) {
+        try {
+          const trkRef = doc(db, "postal_trackings", trk.id);
+          await updateDoc(trkRef, {
+            archive_location_id: targetLocation.id,
+            archive_location_code: targetLocation.location_code,
+            archive_cabinet: targetLocation.cabinet,
+            archive_shelf: targetLocation.shelf,
+            archive_folder: targetLocation.folder,
+            archive_folder_name: targetLocation.folder_name || targetLocation.sequence,
+            updatedAt: serverTimestamp(),
+          });
+        } catch (trkErr) {
+          console.warn("Could not sync tracking archive:", trkErr);
+        }
+      }
+
       // Activity Log
       const logRef = doc(collection(db, "activity_logs"));
       await setDoc(logRef, {
@@ -554,6 +572,22 @@ export default function IncomingDocumentDetailPage({ params }: { params: Promise
         updatedAt: serverTimestamp(),
         updated_by: appUser?.id || "",
       });
+
+      // Clear from linked trackings as well
+      for (const trk of linkedTrackings) {
+        try {
+          const trkRef = doc(db, "postal_trackings", trk.id);
+          await updateDoc(trkRef, {
+            archive_location_id: "",
+            archive_location_code: "",
+            archive_cabinet: "",
+            archive_shelf: "",
+            archive_folder: "",
+            archive_folder_name: "",
+            updatedAt: serverTimestamp(),
+          });
+        } catch (e) {}
+      }
 
       setActionSuccess("นำออกจากแฟ้มจัดเก็บเรียบร้อยแล้ว");
       setTimeout(() => setActionSuccess(""), 4000);

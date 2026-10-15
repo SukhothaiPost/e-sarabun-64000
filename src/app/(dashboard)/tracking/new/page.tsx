@@ -682,15 +682,15 @@ function NewTrackingContent() {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-600">
-                เลือกแฟ้มจัดเก็บต้นฉบับเอกสาร / ใบเสร็จเลขพัสดุ (หากเป็นการต่อเรื่องจากหนังสือรับ ระบบจะบันทึกจัดเก็บหนังสือรับเข้าแฟ้มนี้ให้อัตโนมัติ)
+              <p className="text-xs text-amber-800">
+                💡 <strong>สำหรับเจ้าหน้าที่ออกเลข:</strong> สามารถปล่อยว่างช่องนี้ไว้ได้ เพื่อให้เจ้าของงานมาเลือกจัดเก็บเข้าแฟ้มเองทีหลังในหน้ารายการ Tracking
               </p>
               <select
                 value={selectedArchiveId}
                 onChange={(e) => setSelectedArchiveId(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
               >
-                <option value="">-- ยังไม่จัดเก็บเข้าแฟ้ม (บันทึกเฉพาะเลข Tracking) --</option>
+                <option value="">-- ยังไม่จัดเก็บเข้าแฟ้ม (เจ้าของงานจะเลือกเข้าแฟ้มภายหลัง) --</option>
                 {archiveLocations.map((loc) => (
                   <option key={loc.id} value={loc.id}>
                     [{loc.location_code}] {loc.folder_name || loc.sequence} (ตู้ {loc.cabinet} / ชั้น {loc.shelf} • หมวด {loc.category})
